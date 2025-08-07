@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（サウンド修正版）</title>
+  <title>花火アニメーション（サウンド停止遅延版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.sound.min.js"></script>
   <style>
@@ -41,6 +41,8 @@
     const KAMURO_FADE_RATE = 1.8;
     const HEART_PARTICLE_COUNT = 30;
     const HEART_EXPLOSION_SCALE = 0.2;
+
+    const SOUND_DELAY_MS = 800; // すべての音に適用する固定の遅延時間（1000ミリ秒 = 1秒）
 
     // ==================================================================
 
@@ -175,14 +177,16 @@
     // ===== 花火クラス =====
     class Firework {
       constructor(x) {
-        // ★ 変更点：再生するサウンドインスタンスを保持するプロパティを追加
         this.launchSoundInstance = null;
-        // ★ 変更点：サウンドインスタンスをプロパティに保存
+
         if (launchSounds.length > 0) {
             this.launchSoundInstance = launchSounds[nextLaunchSound];
-            if (this.launchSoundInstance.isLoaded()) {
-                this.launchSoundInstance.setVolume(LAUNCH_SOUND_VOLUME);
-                this.launchSoundInstance.play();
+            const sound = this.launchSoundInstance;
+            if (sound.isLoaded()) {
+                setTimeout(() => {
+                    sound.setVolume(LAUNCH_SOUND_VOLUME);
+                    sound.play();
+                }, SOUND_DELAY_MS);
             }
             nextLaunchSound = (nextLaunchSound + 1) % NUM_LAUNCH_SOUNDS;
         }
@@ -231,16 +235,24 @@
       }
 
       explode() {
-        // ★ 変更点：保持しているインスタンスの音を停止する処理を復活
-        if (this.launchSoundInstance && this.launchSoundInstance.isPlaying()) {
-          this.launchSoundInstance.stop();
+        // ★ 変更点：打ち上げ音の停止も、再生と同様に遅延させる
+        if (this.launchSoundInstance) {
+          const soundToStop = this.launchSoundInstance;
+          setTimeout(() => {
+            if (soundToStop.isPlaying()) {
+              soundToStop.stop();
+            }
+          }, SOUND_DELAY_MS);
         }
 
         if (explosionSounds.length > 0 && explosionSounds[nextExplosionSound].isLoaded()) {
           const sound = explosionSounds[nextExplosionSound];
-          sound.setVolume(EXPLOSION_SOUND_VOLUME);
-          sound.play();
           nextExplosionSound = (nextExplosionSound + 1) % NUM_EXPLOSION_SOUNDS;
+
+          setTimeout(() => {
+            sound.setVolume(EXPLOSION_SOUND_VOLUME);
+            sound.play();
+          }, SOUND_DELAY_MS);
         }
 
         if (this.effect === 'heart') {
