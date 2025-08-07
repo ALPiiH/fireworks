@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（色変化タイミング調整版）</title>
+  <title>花火アニメーション（かむろ追加版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <style>
     /* ページの余白をなくす */
@@ -18,11 +18,10 @@
   <script>
     // ==================================================================
     // ★★★ パラメータ調整エリア ★★★
-    // ここにある変数の値を変更することで、花火の見た目や動きを調整できます。
     // ==================================================================
 
     // --- 全体に関する設定 ---
-    const NEW_FIREWORK_PROBABILITY = 0.02; 
+    const NEW_FIREWORK_PROBABILITY = 0.03; 
     const CLICK_FIREWORK_COUNT = 1;      
 
     // --- 打ち上げに関する設定 ---
@@ -34,15 +33,20 @@
     const PARTICLE_COUNT_MIN = 80;  
     const PARTICLE_COUNT_MAX = 200; 
     const OUTER_RING_COUNT = 15;    
-    
-    // ★★★ 変更点：色変化のタイミングを調整するパラメータを追加 ★★★
-    const COLOR_CHANGE_THRESHOLD = 100; // 色が変わる花火が、変化を始める寿命のしきい値（最大255）
+    const COLOR_CHANGE_THRESHOLD = 160;
 
     // --- 爆発の動きに関する設定 ---
     const EXPLOSION_SPEED_MIN = 0.5; 
     const EXPLOSION_SPEED_MAX = 10;  
     const PARTICLE_DRAG = 0.96;      
-    const PARTICLE_FADE_RATE = 3.5;  
+    const PARTICLE_FADE_RATE = 3.5;
+    
+    // ★★★ 変更点：「かむろ」専用のパラメータを追加 ★★★
+    const KAMURO_GRAVITY = 0.03; // かむろの粒子にかかる特別な重力（小さいほどゆっくり落ちる）
+    const KAMURO_FADE_RATE = 1.0;  // かむろの粒子の消える速さ（小さいほど長く残る）
+    const KAMURO_GLITTER_PROBABILITY = 0; // かむろの粒子がキラキラ光る粒を出す確率
+    const KAMURO_GLITTER_FADE_RATE = 15;  // キラキラ光る粒の消える速さ（大きいほどすぐ消える）
+
 
     // ==================================================================
 
@@ -50,10 +54,13 @@
     // --- グローバル変数 ---
     let fireworks = [];
     let gravity;
+    // ★★★ 変更点：かむろ専用の重力ベクトルを追加 ★★★
+    let kamuroGravity;
 
     function setup() {
       createCanvas(windowWidth, windowHeight);
       gravity = createVector(0, GRAVITY);
+      kamuroGravity = createVector(0, KAMURO_GRAVITY); // かむろ専用の重力ベクトルを初期化
       stroke(255);
       strokeWeight(4);
       colorMode(HSB);
@@ -111,7 +118,15 @@
         this.prevPos.set(this.pos);
         if (!this.isFirework) {
           this.vel.mult(PARTICLE_DRAG);
-          this.lifespan -= PARTICLE_FADE_RATE;
+          
+          // ★★★ 変更点：エフェクトタイプに応じて寿命の減り方を変える ★★★
+          if (this.effect === 'kamuro') {
+            this.lifespan -= KAMURO_FADE_RATE;
+          } else if (this.effect === 'glitter') {
+            this.lifespan -= KAMURO_GLITTER_FADE_RATE;
+          } else {
+            this.lifespan -= PARTICLE_FADE_RATE;
+          }
         }
         this.vel.add(this.acc);
         this.pos.add(this.vel);
@@ -126,31 +141,29 @@
         colorMode(HSB);
         
         if (!this.isFirework) {
-          strokeWeight(2);
+          // ★★★ 変更点：エフェクトタイプに応じて見た目を変える ★★★
+          if (this.effect === 'glitter') {
+            strokeWeight(1); // キラキラ光る粒は小さく
+          } else {
+            strokeWeight(2);
+          }
 
           if (this.effect === 'colorChange') {
-            // ★★★ 変更点：色変化のロジックを更新 ★★★
             let finalColor;
-            
-            // 寿命がしきい値より大きい間は、色を変えない
             if (this.lifespan > COLOR_CHANGE_THRESHOLD) {
               finalColor = color(this.hu, 255, 255);
             } else {
-              // 寿命がしきい値を下回ったら、色の変化を開始
               const fromColor = color(this.hu, 255, 255);
               const toColor = color(this.hu2, 255, 255);
-              // 残りの寿命（しきい値〜0）の間で色が完全に変化するように割合を計算
               const amt = map(this.lifespan, COLOR_CHANGE_THRESHOLD, 0, 0, 1);
               finalColor = lerpColor(fromColor, toColor, amt);
             }
-            // 計算結果の色と、現在の寿命（透明度）で描画
             stroke(finalColor, this.lifespan);
-
           } else {
             stroke(this.hu, 255, 255, this.lifespan);
           }
 
-          if (this.type === 'line') {
+          if (this.type === 'line' && this.effect !== 'glitter') {
             line(this.pos.x, this.pos.y, this.prevPos.x, this.prevPos.y);
           } else {
             point(this.pos.x, this.pos.y);
@@ -166,21 +179,28 @@
     // ===== 花火クラス =====
     class Firework {
       constructor(x) {
-        this.hu = random(360);
+        // ★★★ 変更点：kamuroをエフェクトリストに追加 ★★★
+        const effects = ['normal', 'colorChange', 'bicolor', 'kamuro', 'kamuro']; // かむろの出現率を少し上げる
+        this.effect = random(effects);
+
+        if (this.effect === 'kamuro') {
+          this.hu = random(40, 60); // かむろの色を金色/黄色系に
+          this.type = 'point'; // かむろの形状を点に固定
+        } else {
+          this.hu = random(360);
+          this.type = random(1) < 0.5 ? 'point' : 'line';
+        }
+        
         const startX = x || random(200, width - 200);
-        this.type = random(1) < 0.5 ? 'point' : 'line';
         this.firework = new Particle(startX, height, true, { hu: this.hu });
         this.exploded = false;
         this.particles = [];
         this.particleCount = random(PARTICLE_COUNT_MIN, PARTICLE_COUNT_MAX);
 
-        const effects = ['normal', 'colorChange', 'bicolor'];
-        this.effect = random(effects);
-
         if (this.effect === 'colorChange') {
           this.hu2 = random(360); 
         } else if (this.effect === 'bicolor') {
-          this.hu2 = random(360); 
+          this.hu2 = (this.hu + 180) % 360; 
         }
       }
 
@@ -196,20 +216,42 @@
           }
         } else {
           for (let i = this.particles.length - 1; i >= 0; i--) {
-            this.particles[i].update();
-            if (this.particles[i].done()) this.particles.splice(i, 1);
+            const p = this.particles[i];
+            
+            // ★★★ 変更点：kamuroエフェクトに特別な処理を追加 ★★★
+            if (p.effect === 'kamuro' && !p.isFirework) {
+              // 1. 専用の弱い重力をかける
+              p.applyForce(kamuroGravity);
+
+              // 2. 確率でキラキラ光る粒を生成する
+              if (random(1) < KAMURO_GLITTER_PROBABILITY) {
+                const glitterOptions = {
+                  velocity: p5.Vector.random2D().mult(0.5), // その場に留まるような微弱な速度
+                  type: 'point',
+                  effect: 'glitter', // キラキラ光る粒専用のエフェクト
+                  hu: p.hu
+                };
+                // 新しいキラキラ粒子を花火の粒子リストに追加
+                this.particles.push(new Particle(p.pos.x, p.pos.y, false, glitterOptions));
+              }
+            }
+            
+            p.update();
+            if (p.done()) {
+              this.particles.splice(i, 1);
+            }
           }
         }
       }
 
       explode() {
         let maxRandomSpeed = 0;
+        
+        let explosionSpeed = (this.effect === 'kamuro') ? EXPLOSION_SPEED_MAX / 2 : EXPLOSION_SPEED_MAX;
 
         for (let i = 0; i < this.particleCount; i++) {
           const vel = p5.Vector.random2D();
-          let speed = (this.type === 'line') ?
-            random(EXPLOSION_SPEED_MIN, EXPLOSION_SPEED_MAX - 1) :
-            random(EXPLOSION_SPEED_MIN, EXPLOSION_SPEED_MAX);
+          let speed = random(EXPLOSION_SPEED_MIN, explosionSpeed);
           if (speed > maxRandomSpeed) maxRandomSpeed = speed;
           vel.mult(speed);
 
@@ -220,25 +262,23 @@
           if (this.effect === 'bicolor') {
             particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
           }
-
-          const p = new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions);
-          this.particles.push(p);
+          this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
         }
         
-        for (let i = 0; i < OUTER_RING_COUNT; i++) {
-          const angle = i * (TWO_PI / OUTER_RING_COUNT);
-          const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
-          
-          let particleOptions = {
-            velocity: velocity, type: this.type, effect: this.effect,
-            hu: this.hu, hu2: this.hu2
-          };
-          if (this.effect === 'bicolor') {
-            particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+        // かむろの時は輪郭用の火花は出さない
+        if (this.effect !== 'kamuro') {
+          for (let i = 0; i < OUTER_RING_COUNT; i++) {
+            const angle = i * (TWO_PI / OUTER_RING_COUNT);
+            const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
+            let particleOptions = {
+              velocity: velocity, type: this.type, effect: this.effect,
+              hu: this.hu, hu2: this.hu2
+            };
+            if (this.effect === 'bicolor') {
+              particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+            }
+            this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
           }
-
-          const p = new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions);
-          this.particles.push(p);
         }
       }
 
