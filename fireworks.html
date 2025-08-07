@@ -36,7 +36,7 @@
     const PARTICLE_COUNT_MIN = 80;  
     const PARTICLE_COUNT_MAX = 200; 
     const OUTER_RING_COUNT = 15;    
-    const COLOR_CHANGE_THRESHOLD = 160;
+    const COLOR_CHANGE_THRESHOLD = 135;
     const DEFAULT_PARTICLE_WEIGHT = 2;
     const KAMURO_TRAIL_WEIGHT = 1;
 
@@ -160,16 +160,13 @@
           }
 
           if (this.effect === 'colorChange') {
-            let finalColor;
+            let currentHu;
             if (this.lifespan > COLOR_CHANGE_THRESHOLD) {
-              finalColor = color(this.hu, 255, 255);
+              currentHu = this.hu;
             } else {
-              const fromColor = color(this.hu, 255, 255);
-              const toColor = color(this.hu2, 255, 255);
-              const amt = map(this.lifespan, COLOR_CHANGE_THRESHOLD, 0, 0, 1);
-              finalColor = lerpColor(fromColor, toColor, amt);
+              currentHu = this.hu2;
             }
-            stroke(finalColor, this.lifespan);
+            stroke(currentHu, 255, 255, this.lifespan);
           } else {
             stroke(this.hu, 255, 255, this.lifespan);
           }
