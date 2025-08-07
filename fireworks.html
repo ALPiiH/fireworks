@@ -44,21 +44,27 @@
 
     // ==================================================================
 
-    let launchSound;
+    const launchSounds = [];
+    const NUM_LAUNCH_SOUNDS = 20;
+    let nextLaunchSound = 0;
+
     const explosionSounds = [];
-    const NUM_EXPLOSION_SOUNDS = 10;
+    const NUM_EXPLOSION_SOUNDS = 20;
     let nextExplosionSound = 0;
+
+    const LAUNCH_SOUND_VOLUME = 0.1;
+    const EXPLOSION_SOUND_VOLUME = 1.0;
 
     let fireworks = [];
     let gravity;
     let kamuroGravity;
 
     function preload() {
-      // 音声ファイルを読み込みます。
-      // 読み込みに失敗すると、ブラウザのコンソールにエラーが表示されます。
       try {
         soundFormats('mp3');
-        launchSound = loadSound('launch.mp3');
+        for (let i = 0; i < NUM_LAUNCH_SOUNDS; i++) {
+          launchSounds.push(loadSound('launch.mp3'));
+        }
         for (let i = 0; i < NUM_EXPLOSION_SOUNDS; i++) {
           explosionSounds.push(loadSound('explosion.mp3'));
         }
@@ -93,8 +99,6 @@
     }
 
     function mousePressed() {
-      // ユーザーの最初のクリックで、ブラウザの音声再生を有効化します。
-      // これが、ご指定のサイトで解説されている内容に対応する、最も重要な部分です。
       if (getAudioContext().state !== 'running') {
         getAudioContext().resume();
       }
@@ -171,8 +175,16 @@
     // ===== 花火クラス =====
     class Firework {
       constructor(x) {
-        if (launchSound && launchSound.isLoaded()) {
-          launchSound.play();
+        // ★ 変更点：再生するサウンドインスタンスを保持するプロパティを追加
+        this.launchSoundInstance = null;
+        // ★ 変更点：サウンドインスタンスをプロパティに保存
+        if (launchSounds.length > 0) {
+            this.launchSoundInstance = launchSounds[nextLaunchSound];
+            if (this.launchSoundInstance.isLoaded()) {
+                this.launchSoundInstance.setVolume(LAUNCH_SOUND_VOLUME);
+                this.launchSoundInstance.play();
+            }
+            nextLaunchSound = (nextLaunchSound + 1) % NUM_LAUNCH_SOUNDS;
         }
 
         const effects = ['normal', 'colorChange', 'bicolor', 'kamuro', 'speedColor', 'heart', 'normal', 'colorChange', 'bicolor', 'kamuro'];
@@ -219,8 +231,15 @@
       }
 
       explode() {
+        // ★ 変更点：保持しているインスタンスの音を停止する処理を復活
+        if (this.launchSoundInstance && this.launchSoundInstance.isPlaying()) {
+          this.launchSoundInstance.stop();
+        }
+
         if (explosionSounds.length > 0 && explosionSounds[nextExplosionSound].isLoaded()) {
-          explosionSounds[nextExplosionSound].play();
+          const sound = explosionSounds[nextExplosionSound];
+          sound.setVolume(EXPLOSION_SOUND_VOLUME);
+          sound.play();
           nextExplosionSound = (nextExplosionSound + 1) % NUM_EXPLOSION_SOUNDS;
         }
 
