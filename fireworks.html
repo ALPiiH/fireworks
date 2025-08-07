@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（打ち上げ音確率再生版）</title>
+  <title>花火アニメーション（爆発音ランダム再生・同時再生対応版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.sound.min.js"></script>
   <style>
@@ -42,9 +42,8 @@
     const HEART_PARTICLE_COUNT = 30;
     const HEART_EXPLOSION_SCALE = 0.2;
 
-    const SOUND_DELAY_MS = 1000; // すべての音に適用する固定の遅延時間
+    const SOUND_DELAY_MS = 1000;
 
-    // ★ 変更点：打ち上げ音が鳴る確率（0.2 = 20%）
     const LAUNCH_SOUND_PROBABILITY = 0.2;
 
     // ==================================================================
@@ -53,6 +52,7 @@
     const NUM_LAUNCH_SOUNDS = 20;
     let nextLaunchSound = 0;
 
+    // ★ 変更点: 爆発音関連の変数を再定義
     const explosionSounds = [];
     const NUM_EXPLOSION_SOUNDS = 20;
     let nextExplosionSound = 0;
@@ -67,14 +67,28 @@
     function preload() {
       try {
         soundFormats('mp3');
+        // 打ち上げ音の読み込み
         for (let i = 0; i < NUM_LAUNCH_SOUNDS; i++) {
           launchSounds.push(loadSound('launch.mp3'));
         }
-        for (let i = 0; i < NUM_EXPLOSION_SOUNDS; i++) {
-          explosionSounds.push(loadSound('explosion.mp3'));
+
+        // ★ 変更点: 5種類の爆発音をそれぞれ4回ずつ読み込み、合計20個のサウンドプールを作成
+        const explosionSoundFiles = [
+          'explosion1.mp3',
+          'explosion2.mp3',
+          'explosion3.mp3',
+          'explosion4.mp3',
+          'explosion5.mp3'
+        ];
+        const numPerSound = NUM_EXPLOSION_SOUNDS / explosionSoundFiles.length;
+        for (let i = 0; i < numPerSound; i++) {
+          for (const file of explosionSoundFiles) {
+            explosionSounds.push(loadSound(file));
+          }
         }
+
       } catch (e) {
-        console.error("音声ファイルの読み込みに失敗しました。launch.mp3 と explosion.mp3 を用意してください。");
+        console.error("音声ファイルの読み込みに失敗しました。launch.mp3 と explosion1.mp3〜explosion5.mp3 を用意してください。");
       }
     }
 
@@ -84,6 +98,9 @@
       kamuroGravity = createVector(0, KAMURO_GRAVITY);
       stroke(255);
       colorMode(HSB);
+
+      // ★ 変更点: 爆発音の再生順がランダムになるようにサウンドプールをシャッフル
+      shuffle(explosionSounds, true);
     }
 
     function draw() {
@@ -182,7 +199,6 @@
       constructor(x) {
         this.launchSoundInstance = null;
 
-        // ★ 変更点：設定した確率で打ち上げ音を再生する
         if (random(1) < LAUNCH_SOUND_PROBABILITY && launchSounds.length > 0) {
             this.launchSoundInstance = launchSounds[nextLaunchSound];
             const sound = this.launchSoundInstance;
@@ -248,6 +264,7 @@
           }, SOUND_DELAY_MS);
         }
 
+        // ★ 変更点: シャッフルされたサウンドプールから順番に再生する
         if (explosionSounds.length > 0 && explosionSounds[nextExplosionSound].isLoaded()) {
           const sound = explosionSounds[nextExplosionSound];
           nextExplosionSound = (nextExplosionSound + 1) % NUM_EXPLOSION_SOUNDS;
