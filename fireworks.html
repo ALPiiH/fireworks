@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>花火アニメーション（色変化タイミング調整版）</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <style>
+    /* ページの余白をなくす */
+    body {
+      padding: 0;
+      margin: 0;
+      overflow: hidden; /* スクロールバーを非表示にする */
+    }
+  </style>
+</head>
+<body>
+  <script>
+    // ==================================================================
+    // ★★★ パラメータ調整エリア ★★★
+    // ここにある変数の値を変更することで、花火の見た目や動きを調整できます。
+    // ==================================================================
+
+    // --- 全体に関する設定 ---
+    const NEW_FIREWORK_PROBABILITY = 0.02; 
+    const CLICK_FIREWORK_COUNT = 1;      
+
+    // --- 打ち上げに関する設定 ---
+    const LAUNCH_SPEED_MIN = -11; 
+    const LAUNCH_SPEED_MAX = -6;  
+    const GRAVITY = 0.1;          
+
+    // --- 爆発の見た目に関する設定 ---
+    const PARTICLE_COUNT_MIN = 80;  
+    const PARTICLE_COUNT_MAX = 200; 
+    const OUTER_RING_COUNT = 15;    
+    
+    // ★★★ 変更点：色変化のタイミングを調整するパラメータを追加 ★★★
+    const COLOR_CHANGE_THRESHOLD = 100; // 色が変わる花火が、変化を始める寿命のしきい値（最大255）
+
+    // --- 爆発の動きに関する設定 ---
+    const EXPLOSION_SPEED_MIN = 0.5; 
+    const EXPLOSION_SPEED_MAX = 10;  
+    const PARTICLE_DRAG = 0.96;      
+    const PARTICLE_FADE_RATE = 3.5;  
+
+    // ==================================================================
+
+
+    // --- グローバル変数 ---
+    let fireworks = [];
+    let gravity;
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      gravity = createVector(0, GRAVITY);
+      stroke(255);
+      strokeWeight(4);
+      colorMode(HSB);
+    }
+
+    function draw() {
+      colorMode(RGB);
+      background(0, 0, 0, 25);
+      
+      if (random(1) < NEW_FIREWORK_PROBABILITY) {
+        fireworks.push(new Firework());
+      }
+
+      for (let i = fireworks.length - 1; i >= 0; i--) {
+        fireworks[i].update();
+        fireworks[i].show();
+        if (fireworks[i].done()) {
+          fireworks.splice(i, 1);
+        }
+      }
+    }
+    
+    function mousePressed() {
+      for (let i = 0; i < CLICK_FIREWORK_COUNT; i++) {
+        fireworks.push(new Firework(mouseX));
+      }
+    }
+
+    // ===== パーティクル（粒子）クラス =====
+    class Particle {
+      constructor(x, y, isFirework, options = {}) {
+        this.pos = createVector(x, y);
+        this.prevPos = createVector(x, y); 
+        this.isFirework = isFirework;
+        this.lifespan = 255;
+        this.acc = createVector(0, 0);
+
+        this.hu = options.hu || 0;
+        this.hu2 = options.hu2 || this.hu;
+        this.type = options.type || 'point';
+        this.effect = options.effect || 'normal';
+
+        if (isFirework) {
+          this.vel = createVector(0, random(LAUNCH_SPEED_MIN, LAUNCH_SPEED_MAX));
+        } else {
+          this.vel = options.velocity;
+        }
+      }
+
+      applyForce(force) {
+        this.acc.add(force);
+      }
+
+      update() {
+        this.prevPos.set(this.pos);
+        if (!this.isFirework) {
+          this.vel.mult(PARTICLE_DRAG);
+          this.lifespan -= PARTICLE_FADE_RATE;
+        }
+        this.vel.add(this.acc);
+        this.pos.add(this.vel);
+        this.acc.mult(0);
+      }
+
+      done() {
+        return this.lifespan < 0;
+      }
+
+      show() {
+        colorMode(HSB);
+        
+        if (!this.isFirework) {
+          strokeWeight(2);
+
+          if (this.effect === 'colorChange') {
+            // ★★★ 変更点：色変化のロジックを更新 ★★★
+            let finalColor;
+            
+            // 寿命がしきい値より大きい間は、色を変えない
+            if (this.lifespan > COLOR_CHANGE_THRESHOLD) {
+              finalColor = color(this.hu, 255, 255);
+            } else {
+              // 寿命がしきい値を下回ったら、色の変化を開始
+              const fromColor = color(this.hu, 255, 255);
+              const toColor = color(this.hu2, 255, 255);
+              // 残りの寿命（しきい値〜0）の間で色が完全に変化するように割合を計算
+              const amt = map(this.lifespan, COLOR_CHANGE_THRESHOLD, 0, 0, 1);
+              finalColor = lerpColor(fromColor, toColor, amt);
+            }
+            // 計算結果の色と、現在の寿命（透明度）で描画
+            stroke(finalColor, this.lifespan);
+
+          } else {
+            stroke(this.hu, 255, 255, this.lifespan);
+          }
+
+          if (this.type === 'line') {
+            line(this.pos.x, this.pos.y, this.prevPos.x, this.prevPos.y);
+          } else {
+            point(this.pos.x, this.pos.y);
+          }
+        } else {
+          strokeWeight(4);
+          stroke(this.hu, 255, 255);
+          point(this.pos.x, this.pos.y);
+        }
+      }
+    }
+
+    // ===== 花火クラス =====
+    class Firework {
+      constructor(x) {
+        this.hu = random(360);
+        const startX = x || random(200, width - 200);
+        this.type = random(1) < 0.5 ? 'point' : 'line';
+        this.firework = new Particle(startX, height, true, { hu: this.hu });
+        this.exploded = false;
+        this.particles = [];
+        this.particleCount = random(PARTICLE_COUNT_MIN, PARTICLE_COUNT_MAX);
+
+        const effects = ['normal', 'colorChange', 'bicolor'];
+        this.effect = random(effects);
+
+        if (this.effect === 'colorChange') {
+          this.hu2 = random(360); 
+        } else if (this.effect === 'bicolor') {
+          this.hu2 = random(360); 
+        }
+      }
+
+      done() { return this.exploded && this.particles.length === 0; }
+
+      update() {
+        if (!this.exploded) {
+          this.firework.applyForce(gravity);
+          this.firework.update();
+          if (this.firework.vel.y >= 0) {
+            this.exploded = true;
+            this.explode();
+          }
+        } else {
+          for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update();
+            if (this.particles[i].done()) this.particles.splice(i, 1);
+          }
+        }
+      }
+
+      explode() {
+        let maxRandomSpeed = 0;
+
+        for (let i = 0; i < this.particleCount; i++) {
+          const vel = p5.Vector.random2D();
+          let speed = (this.type === 'line') ?
+            random(EXPLOSION_SPEED_MIN, EXPLOSION_SPEED_MAX - 1) :
+            random(EXPLOSION_SPEED_MIN, EXPLOSION_SPEED_MAX);
+          if (speed > maxRandomSpeed) maxRandomSpeed = speed;
+          vel.mult(speed);
+
+          let particleOptions = {
+            velocity: vel, type: this.type, effect: this.effect,
+            hu: this.hu, hu2: this.hu2
+          };
+          if (this.effect === 'bicolor') {
+            particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+          }
+
+          const p = new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions);
+          this.particles.push(p);
+        }
+        
+        for (let i = 0; i < OUTER_RING_COUNT; i++) {
+          const angle = i * (TWO_PI / OUTER_RING_COUNT);
+          const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
+          
+          let particleOptions = {
+            velocity: velocity, type: this.type, effect: this.effect,
+            hu: this.hu, hu2: this.hu2
+          };
+          if (this.effect === 'bicolor') {
+            particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+          }
+
+          const p = new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions);
+          this.particles.push(p);
+        }
+      }
+
+      show() {
+        if (!this.exploded) {
+          this.firework.show();
+        } else {
+          for (let p of this.particles) p.show();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
