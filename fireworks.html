@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（太さ調整版）</title>
+  <title>花火アニメーション（speedColor二重輪郭版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <style>
     /* ページの余白をなくす */
@@ -37,16 +37,18 @@
     const PARTICLE_COUNT_MAX = 200; 
     const OUTER_RING_COUNT = 15;    
     const COLOR_CHANGE_THRESHOLD = 160;
-
-    // ★★★ 変更点：火花の太さを調整するパラメータを追加 ★★★
-    const DEFAULT_PARTICLE_WEIGHT = 2; // 通常の火花（点）の太さ
-    const KAMURO_TRAIL_WEIGHT = 1;     // かむろの軌跡（線）の太さ
+    const DEFAULT_PARTICLE_WEIGHT = 2;
+    const KAMURO_TRAIL_WEIGHT = 1.5;
 
     // --- 爆発の動きに関する設定 ---
     const EXPLOSION_SPEED_MIN = 0.5; 
     const EXPLOSION_SPEED_MAX = 10;  
     const PARTICLE_DRAG = 0.96;      
     const PARTICLE_FADE_RATE = 3.5;
+    
+    // --- 「speedColor」専用のパラメータ ---
+    const SPEED_COLOR_THRESHOLD = 5.0; 
+    const SPEED_COLOR_RING_COUNT = 15; 
     
     // --- 「かむろ」専用のパラメータ ---
     const KAMURO_GRAVITY = 0.03;
@@ -64,7 +66,6 @@
       gravity = createVector(0, GRAVITY);
       kamuroGravity = createVector(0, KAMURO_GRAVITY);
       stroke(255);
-      // strokeWeight(4); // ここでの一括設定は不要になる
       colorMode(HSB);
     }
 
@@ -128,7 +129,7 @@
             this.lifespan -= PARTICLE_FADE_RATE;
           }
           
-          if (this.type === 'line' || this.effect === 'kamuro') {
+          if (this.type === 'line') {
             this.history.push(this.pos.copy());
             if (this.history.length > 30) {
               this.history.splice(0, 1);
@@ -148,7 +149,6 @@
         colorMode(HSB);
         
         if (!this.isFirework) {
-          // ★★★ 変更点：エフェクトタイプに応じて線の太さを設定 ★★★
           if (this.effect === 'kamuro') {
             strokeWeight(KAMURO_TRAIL_WEIGHT);
           } else {
@@ -181,7 +181,6 @@
             point(this.pos.x, this.pos.y);
           }
         } else {
-          // 打ち上げ玉の太さを設定
           strokeWeight(4);
           stroke(this.hu, 255, 255);
           point(this.pos.x, this.pos.y);
@@ -192,12 +191,16 @@
     // ===== 花火クラス =====
     class Firework {
       constructor(x) {
-        const effects = ['normal', 'colorChange', 'bicolor', 'kamuro'];
+        const effects = ['normal', 'colorChange', 'bicolor', 'kamuro', 'speedColor'];
         this.effect = random(effects);
 
         if (this.effect === 'kamuro') {
           this.hu = random(360);
           this.type = 'line';
+        } else if (this.effect === 'speedColor') {
+          this.type = 'point';
+          this.huSlow = random(360);
+          this.huFast = random(360);
         } else {
           this.hu = random(360);
           this.type = 'point';
@@ -246,32 +249,67 @@
         let maxRandomSpeed = 0;
         let explosionSpeed = (this.effect === 'kamuro') ? EXPLOSION_SPEED_MAX / 2 : EXPLOSION_SPEED_MAX;
 
+        // 内側のランダムな火花を生成
         for (let i = 0; i < this.particleCount; i++) {
           const vel = p5.Vector.random2D();
           let speed = random(EXPLOSION_SPEED_MIN, explosionSpeed);
           if (speed > maxRandomSpeed) maxRandomSpeed = speed;
           vel.mult(speed);
 
-          let particleOptions = {
-            velocity: vel, type: this.type, effect: this.effect,
-            hu: this.hu, hu2: this.hu2
-          };
+          let particleOptions = { velocity: vel, type: this.type, effect: this.effect };
+
           if (this.effect === 'bicolor') {
             particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+          } else if (this.effect === 'speedColor') {
+            particleOptions.hu = speed > SPEED_COLOR_THRESHOLD ? this.huFast : this.huSlow;
+          } else { 
+            particleOptions.hu = this.hu;
+            particleOptions.hu2 = this.hu2;
           }
+          
           this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
         }       
-        for (let i = 0; i < OUTER_RING_COUNT; i++) {
-          const angle = i * (TWO_PI / OUTER_RING_COUNT);
-          const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
-          let particleOptions = {
-            velocity: velocity, type: this.type, effect: this.effect,
-            hu: this.hu, hu2: this.hu2
-          };
-          if (this.effect === 'bicolor') {
-            particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+
+        // --- 輪郭の生成 ---
+        // ★★★ 変更点：if/elseの分岐をやめ、それぞれのエフェクトで輪郭を生成するように変更 ★★★
+
+        // 1. 「かむろ」以外のエフェクトで、最大速度の輪郭を生成
+        if (this.effect !== 'kamuro') {
+          const angleIncrement = TWO_PI / OUTER_RING_COUNT;
+          for (let i = 0; i < OUTER_RING_COUNT; i++) {
+            const angle = i * angleIncrement;
+            const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
+            
+            let particleOptions = { velocity: velocity, type: this.type, effect: this.effect };
+            
+            if (this.effect === 'bicolor') {
+              particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+            } else if (this.effect === 'speedColor') {
+              // 最大速度なので、速い粒の色を適用
+              particleOptions.hu = this.huFast;
+            } else {
+              particleOptions.hu = this.hu;
+              particleOptions.hu2 = this.hu2;
+            }
+            this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
           }
-          this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+        }
+        
+        // 2. 「speedColor」の場合のみ、追加で境界速度の輪郭を生成
+        if (this.effect === 'speedColor') {
+          const angleIncrement = TWO_PI / SPEED_COLOR_RING_COUNT;
+          for (let i = 0; i < SPEED_COLOR_RING_COUNT; i++) {
+            const angle = i * angleIncrement;
+            const velocity = p5.Vector.fromAngle(angle).mult(SPEED_COLOR_THRESHOLD);
+            
+            let particleOptions = { 
+              velocity: velocity, 
+              type: this.type, 
+              effect: this.effect, 
+              hu: this.huSlow // 輪郭の色を「遅い粒用の色」に固定
+            };
+            this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+          }
         }
       }
 
