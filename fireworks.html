@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（ハート追加・輪郭修正版）</title>
+  <title>花火アニメーション（サウンド修正版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.sound.min.js"></script>
   <style>
-    /* ページの余白をなくす */
     body {
       padding: 0;
       margin: 0;
-      overflow: hidden; /* スクロールバーを非表示にする */
+      overflow: hidden;
     }
   </style>
 </head>
@@ -19,51 +19,53 @@
     // ==================================================================
     // ★★★ パラメータ調整エリア ★★★
     // ==================================================================
-
-    // --- 全体に関する設定 ---
-    const NEW_FIREWORK_PROBABILITY = 0.01; 
-    const CLICK_FIREWORK_COUNT = 1;      
-
-    // --- 残像効果に関する設定 ---
-    const BACKGROUND_FADE_ALPHA = 15; 
-
-    // --- 打ち上げに関する設定 ---
-    const LAUNCH_SPEED_MIN = -11; 
-    const LAUNCH_SPEED_MAX = -6;  
-    const GRAVITY = 0.1;          
-
-    // --- 爆発の見た目に関する設定 ---
-    const PARTICLE_COUNT_MIN = 80;  
-    const PARTICLE_COUNT_MAX = 200; 
-    const OUTER_RING_COUNT = 15;    
+    const NEW_FIREWORK_PROBABILITY = 0.01;
+    const CLICK_FIREWORK_COUNT = 1;
+    const BACKGROUND_FADE_ALPHA = 15;
+    const LAUNCH_SPEED_MIN = -11;
+    const LAUNCH_SPEED_MAX = -6;
+    const GRAVITY = 0.1;
+    const PARTICLE_COUNT_MIN = 80;
+    const PARTICLE_COUNT_MAX = 200;
+    const OUTER_RING_COUNT = 15;
     const COLOR_CHANGE_THRESHOLD = 135;
     const DEFAULT_PARTICLE_WEIGHT = 2;
     const KAMURO_TRAIL_WEIGHT = 1;
-
-    // --- 爆発の動きに関する設定 ---
-    const EXPLOSION_SPEED_MIN = 0.5; 
-    const EXPLOSION_SPEED_MAX = 10;  
-    const PARTICLE_DRAG = 0.96;      
+    const EXPLOSION_SPEED_MIN = 0.5;
+    const EXPLOSION_SPEED_MAX = 10;
+    const PARTICLE_DRAG = 0.96;
     const PARTICLE_FADE_RATE = 3.5;
-    
-    // --- 「speedColor」専用のパラメータ ---
-    const SPEED_COLOR_THRESHOLD = 5.0; 
-    const SPEED_COLOR_RING_COUNT = 15; 
-    
-    // --- 「かむろ」専用のパラメータ ---
+    const SPEED_COLOR_THRESHOLD = 5.0;
+    const SPEED_COLOR_RING_COUNT = 15;
     const KAMURO_GRAVITY = 0.03;
     const KAMURO_FADE_RATE = 1.8;
-
-    // --- 「ハート」専用のパラメータ ---
-    const HEART_PARTICLE_COUNT = 30; // ハートを構成する粒子の数
-    const HEART_EXPLOSION_SCALE = 0.2; // ハートの大きさ
+    const HEART_PARTICLE_COUNT = 30;
+    const HEART_EXPLOSION_SCALE = 0.2;
 
     // ==================================================================
 
+    let launchSound;
+    const explosionSounds = [];
+    const NUM_EXPLOSION_SOUNDS = 10;
+    let nextExplosionSound = 0;
 
     let fireworks = [];
     let gravity;
     let kamuroGravity;
+
+    function preload() {
+      // 音声ファイルを読み込みます。
+      // 読み込みに失敗すると、ブラウザのコンソールにエラーが表示されます。
+      try {
+        soundFormats('mp3');
+        launchSound = loadSound('launch.mp3');
+        for (let i = 0; i < NUM_EXPLOSION_SOUNDS; i++) {
+          explosionSounds.push(loadSound('explosion.mp3'));
+        }
+      } catch (e) {
+        console.error("音声ファイルの読み込みに失敗しました。launch.mp3 と explosion.mp3 を用意してください。");
+      }
+    }
 
     function setup() {
       createCanvas(windowWidth, windowHeight);
@@ -76,7 +78,7 @@
     function draw() {
       colorMode(RGB);
       background(0, 0, 0, BACKGROUND_FADE_ALPHA);
-      
+
       if (random(1) < NEW_FIREWORK_PROBABILITY) {
         fireworks.push(new Firework());
       }
@@ -89,8 +91,14 @@
         }
       }
     }
-    
+
     function mousePressed() {
+      // ユーザーの最初のクリックで、ブラウザの音声再生を有効化します。
+      // これが、ご指定のサイトで解説されている内容に対応する、最も重要な部分です。
+      if (getAudioContext().state !== 'running') {
+        getAudioContext().resume();
+      }
+
       for (let i = 0; i < CLICK_FIREWORK_COUNT; i++) {
         fireworks.push(new Firework(mouseX));
       }
@@ -100,7 +108,6 @@
     class Particle {
       constructor(x, y, isFirework, options = {}) {
         this.pos = createVector(x, y);
-        this.prevPos = createVector(x, y); 
         this.isFirework = isFirework;
         this.lifespan = 255;
         this.acc = createVector(0, 0);
@@ -118,26 +125,15 @@
         }
       }
 
-      applyForce(force) {
-        this.acc.add(force);
-      }
+      applyForce(force) { this.acc.add(force); }
 
       update() {
-        this.prevPos.set(this.pos);
         if (!this.isFirework) {
           this.vel.mult(PARTICLE_DRAG);
-          
-          if (this.effect === 'kamuro') {
-            this.lifespan -= KAMURO_FADE_RATE;
-          } else {
-            this.lifespan -= PARTICLE_FADE_RATE;
-          }
-          
+          this.lifespan -= (this.effect === 'kamuro') ? KAMURO_FADE_RATE : PARTICLE_FADE_RATE;
           if (this.type === 'line') {
             this.history.push(this.pos.copy());
-            if (this.history.length > 30) {
-              this.history.splice(0, 1);
-            }
+            if (this.history.length > 30) this.history.splice(0, 1);
           }
         }
         this.vel.add(this.acc);
@@ -145,38 +141,21 @@
         this.acc.mult(0);
       }
 
-      done() {
-        return this.lifespan < 0;
-      }
+      done() { return this.lifespan < 0; }
 
       show() {
         colorMode(HSB);
-        
         if (!this.isFirework) {
-          if (this.effect === 'kamuro') {
-            strokeWeight(KAMURO_TRAIL_WEIGHT);
-          } else {
-            strokeWeight(DEFAULT_PARTICLE_WEIGHT);
+          strokeWeight((this.effect === 'kamuro') ? KAMURO_TRAIL_WEIGHT : DEFAULT_PARTICLE_WEIGHT);
+          let currentHu = this.hu;
+          if (this.effect === 'colorChange' && this.lifespan <= COLOR_CHANGE_THRESHOLD) {
+            currentHu = this.hu2;
           }
-
-          if (this.effect === 'colorChange') {
-            let currentHu;
-            if (this.lifespan > COLOR_CHANGE_THRESHOLD) {
-              currentHu = this.hu;
-            } else {
-              currentHu = this.hu2;
-            }
-            stroke(currentHu, 255, 255, this.lifespan);
-          } else {
-            stroke(this.hu, 255, 255, this.lifespan);
-          }
-          
+          stroke(currentHu, 255, 255, this.lifespan);
           if (this.type === 'line') {
             beginShape();
             noFill();
-            for (const p of this.history) {
-              vertex(p.x, p.y);
-            }
+            for (const p of this.history) vertex(p.x, p.y);
             endShape();
           } else {
             point(this.pos.x, this.pos.y);
@@ -192,36 +171,28 @@
     // ===== 花火クラス =====
     class Firework {
       constructor(x) {
-        // 出現頻度を低くするため、heartはリストに1つだけ入れる
-        const effects = ['normal', 'colorChange', 'bicolor', 'kamuro', 'speedColor', 'normal', 'colorChange', 'bicolor', 'kamuro', 'speedColor', 'normal', 'colorChange', 'bicolor', 'kamuro', 'speedColor', 'heart'];
-        this.effect = random(effects);
+        if (launchSound && launchSound.isLoaded()) {
+          launchSound.play();
+        }
 
-        if (this.effect === 'kamuro') {
-          this.hu = random(360);
-          this.type = 'line';
-        } else if (this.effect === 'speedColor') {
-          this.type = 'point';
+        const effects = ['normal', 'colorChange', 'bicolor', 'kamuro', 'speedColor', 'heart', 'normal', 'colorChange', 'bicolor', 'kamuro'];
+        this.effect = random(effects);
+        this.hu = (this.effect === 'heart') ? 350 : random(360);
+        this.type = (this.effect === 'kamuro') ? 'line' : 'point';
+
+        if (this.effect === 'speedColor' || this.effect === 'bicolor' || this.effect === 'colorChange') {
+          this.hu2 = random(360);
+        }
+        if (this.effect === 'speedColor') {
           this.huSlow = random(360);
           this.huFast = random(360);
-        } else if (this.effect === 'heart') {
-          this.type = 'point';
-          this.hu = 350; // ピンク系の色相に固定
-        } else {
-          this.hu = random(360);
-          this.type = 'point';
         }
-        
+
         const startX = x || random(200, width - 200);
         this.firework = new Particle(startX, height, true, { hu: this.hu });
         this.exploded = false;
         this.particles = [];
         this.particleCount = random(PARTICLE_COUNT_MIN, PARTICLE_COUNT_MAX);
-
-        if (this.effect === 'colorChange') {
-          this.hu2 = random(360); 
-        } else if (this.effect === 'bicolor') {
-          this.hu2 = random(360);
-        }
       }
 
       done() { return this.exploded && this.particles.length === 0; }
@@ -236,14 +207,11 @@
           }
         } else {
           for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            
-            if (p.effect === 'kamuro' && !p.isFirework) {
-              p.applyForce(kamuroGravity);
+            if (this.particles[i].effect === 'kamuro' && !this.particles[i].isFirework) {
+              this.particles[i].applyForce(kamuroGravity);
             }
-            
-            p.update();
-            if (p.done()) {
+            this.particles[i].update();
+            if (this.particles[i].done()) {
               this.particles.splice(i, 1);
             }
           }
@@ -251,95 +219,66 @@
       }
 
       explode() {
-        // ハートエフェクトの場合、専用のロジックで爆発させる
+        if (explosionSounds.length > 0 && explosionSounds[nextExplosionSound].isLoaded()) {
+          explosionSounds[nextExplosionSound].play();
+          nextExplosionSound = (nextExplosionSound + 1) % NUM_EXPLOSION_SOUNDS;
+        }
+
         if (this.effect === 'heart') {
           const particleCount = HEART_PARTICLE_COUNT;
           for (let i = 0; i < particleCount; i++) {
-            // ハートの数式（パラメトリック方程式）を使って粒子の速度を計算
             const t = map(i, 0, particleCount, 0, TWO_PI);
             const x = 16 * pow(sin(t), 3);
-            const y = -(13 * cos(t) - 5 * cos(2*t) - 2 * cos(3*t) - cos(4*t));
-            
-            // 計算した座標を速度ベクトルとして使用し、大きさ（スケール）を調整
+            const y = -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t));
             const vel = createVector(x, y).mult(HEART_EXPLOSION_SCALE);
-            
-            const particleOptions = { 
-              velocity: vel, 
-              type: this.type, 
-              effect: this.effect, 
-              hu: this.hu 
-            };
+            const particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: this.hu };
             this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
           }
         } else {
-          // --- ハート以外の通常爆発処理 ---
           let maxRandomSpeed = 0;
-          // ★ 閾値以下の最大速度を記録する変数を追加
           let maxSlowSpeed = 0;
           let explosionSpeed = (this.effect === 'kamuro') ? EXPLOSION_SPEED_MAX / 2 : EXPLOSION_SPEED_MAX;
-
-          // 内側のランダムな火花を生成
           for (let i = 0; i < this.particleCount; i++) {
             const vel = p5.Vector.random2D();
             let speed = random(EXPLOSION_SPEED_MIN, explosionSpeed);
             if (speed > maxRandomSpeed) maxRandomSpeed = speed;
-
-            // ★ 'speedColor'エフェクトの場合、閾値以下の最大速度を更新
             if (this.effect === 'speedColor' && speed <= SPEED_COLOR_THRESHOLD && speed > maxSlowSpeed) {
               maxSlowSpeed = speed;
             }
-
             vel.mult(speed);
-
             let particleOptions = { velocity: vel, type: this.type, effect: this.effect };
-
             if (this.effect === 'bicolor') {
               particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
             } else if (this.effect === 'speedColor') {
               particleOptions.hu = speed > SPEED_COLOR_THRESHOLD ? this.huFast : this.huSlow;
-            } else { 
-              particleOptions.hu = this.hu;
-              particleOptions.hu2 = this.hu2;
-            }
-            
-            this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
-          }       
-
-          // 外側の輪郭の生成
-          const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
-          for (let i = 0; i < OUTER_RING_COUNT; i++) {
-            const angle = i * angleIncrementOuter;
-            const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
-            
-            let particleOptions = { velocity: velocity, type: this.type, effect: this.effect };
-            
-            if (this.effect === 'bicolor') {
-              particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
-            } else if (this.effect === 'speedColor') {
-              particleOptions.hu = this.huFast; // 外側の輪郭は速い方の色
             } else {
               particleOptions.hu = this.hu;
               particleOptions.hu2 = this.hu2;
             }
             this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
           }
-          
-          // ★ 'speedColor' の内側の輪郭生成ロジックを修正
+          const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
+          for (let i = 0; i < OUTER_RING_COUNT; i++) {
+            const angle = i * angleIncrementOuter;
+            const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
+            let particleOptions = { velocity: velocity, type: this.type, effect: this.effect };
+            if (this.effect === 'bicolor') {
+              particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
+            } else if (this.effect === 'speedColor') {
+              particleOptions.hu = this.huFast;
+            } else {
+              particleOptions.hu = this.hu;
+              particleOptions.hu2 = this.hu2;
+            }
+            this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+          }
           if (this.effect === 'speedColor') {
-            // 閾値以下の粒子が存在した場合のみ輪郭を描画
             if (maxSlowSpeed > 0) {
               const angleIncrementInner = TWO_PI / SPEED_COLOR_RING_COUNT;
               for (let i = 0; i < SPEED_COLOR_RING_COUNT; i++) {
                 const angle = i * angleIncrementInner;
-                // ★ 固定値の代わりに算出した maxSlowSpeed を使用
                 const velocity = p5.Vector.fromAngle(angle).mult(maxSlowSpeed);
-                
-                let particleOptions = { 
-                  velocity: velocity, 
-                  type: this.type, 
-                  effect: this.effect, 
-                  hu: this.huSlow // 内側の輪郭は遅い方の色
-                };
+                let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: this.huSlow };
                 this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
               }
             }
