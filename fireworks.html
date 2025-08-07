@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（サウンド停止遅延版）</title>
+  <title>花火アニメーション（打ち上げ音確率再生版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.sound.min.js"></script>
   <style>
@@ -42,7 +42,10 @@
     const HEART_PARTICLE_COUNT = 30;
     const HEART_EXPLOSION_SCALE = 0.2;
 
-    const SOUND_DELAY_MS = 800; // すべての音に適用する固定の遅延時間（1000ミリ秒 = 1秒）
+    const SOUND_DELAY_MS = 1000; // すべての音に適用する固定の遅延時間
+
+    // ★ 変更点：打ち上げ音が鳴る確率（0.2 = 20%）
+    const LAUNCH_SOUND_PROBABILITY = 0.2;
 
     // ==================================================================
 
@@ -179,7 +182,8 @@
       constructor(x) {
         this.launchSoundInstance = null;
 
-        if (launchSounds.length > 0) {
+        // ★ 変更点：設定した確率で打ち上げ音を再生する
+        if (random(1) < LAUNCH_SOUND_PROBABILITY && launchSounds.length > 0) {
             this.launchSoundInstance = launchSounds[nextLaunchSound];
             const sound = this.launchSoundInstance;
             if (sound.isLoaded()) {
@@ -235,7 +239,6 @@
       }
 
       explode() {
-        // ★ 変更点：打ち上げ音の停止も、再生と同様に遅延させる
         if (this.launchSoundInstance) {
           const soundToStop = this.launchSoundInstance;
           setTimeout(() => {
