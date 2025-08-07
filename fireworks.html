@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（ハート追加版）</title>
+  <title>花火アニメーション（ハート追加・輪郭修正版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <style>
     /* ページの余白をなくす */
@@ -277,6 +277,8 @@
         } else {
           // --- ハート以外の通常爆発処理 ---
           let maxRandomSpeed = 0;
+          // ★ 閾値以下の最大速度を記録する変数を追加
+          let maxSlowSpeed = 0;
           let explosionSpeed = (this.effect === 'kamuro') ? EXPLOSION_SPEED_MAX / 2 : EXPLOSION_SPEED_MAX;
 
           // 内側のランダムな火花を生成
@@ -284,6 +286,12 @@
             const vel = p5.Vector.random2D();
             let speed = random(EXPLOSION_SPEED_MIN, explosionSpeed);
             if (speed > maxRandomSpeed) maxRandomSpeed = speed;
+
+            // ★ 'speedColor'エフェクトの場合、閾値以下の最大速度を更新
+            if (this.effect === 'speedColor' && speed <= SPEED_COLOR_THRESHOLD && speed > maxSlowSpeed) {
+              maxSlowSpeed = speed;
+            }
+
             vel.mult(speed);
 
             let particleOptions = { velocity: vel, type: this.type, effect: this.effect };
@@ -300,10 +308,10 @@
             this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
           }       
 
-          // 輪郭の生成
-          const angleIncrement = TWO_PI / OUTER_RING_COUNT;
+          // 外側の輪郭の生成
+          const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
           for (let i = 0; i < OUTER_RING_COUNT; i++) {
-            const angle = i * angleIncrement;
+            const angle = i * angleIncrementOuter;
             const velocity = p5.Vector.fromAngle(angle).mult(maxRandomSpeed);
             
             let particleOptions = { velocity: velocity, type: this.type, effect: this.effect };
@@ -311,7 +319,7 @@
             if (this.effect === 'bicolor') {
               particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
             } else if (this.effect === 'speedColor') {
-              particleOptions.hu = this.huFast;
+              particleOptions.hu = this.huFast; // 外側の輪郭は速い方の色
             } else {
               particleOptions.hu = this.hu;
               particleOptions.hu2 = this.hu2;
@@ -319,19 +327,24 @@
             this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
           }
           
+          // ★ 'speedColor' の内側の輪郭生成ロジックを修正
           if (this.effect === 'speedColor') {
-            const angleIncrement = TWO_PI / SPEED_COLOR_RING_COUNT;
-            for (let i = 0; i < SPEED_COLOR_RING_COUNT; i++) {
-              const angle = i * angleIncrement;
-              const velocity = p5.Vector.fromAngle(angle).mult(SPEED_COLOR_THRESHOLD);
-              
-              let particleOptions = { 
-                velocity: velocity, 
-                type: this.type, 
-                effect: this.effect, 
-                hu: this.huSlow
-              };
-              this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+            // 閾値以下の粒子が存在した場合のみ輪郭を描画
+            if (maxSlowSpeed > 0) {
+              const angleIncrementInner = TWO_PI / SPEED_COLOR_RING_COUNT;
+              for (let i = 0; i < SPEED_COLOR_RING_COUNT; i++) {
+                const angle = i * angleIncrementInner;
+                // ★ 固定値の代わりに算出した maxSlowSpeed を使用
+                const velocity = p5.Vector.fromAngle(angle).mult(maxSlowSpeed);
+                
+                let particleOptions = { 
+                  velocity: velocity, 
+                  type: this.type, 
+                  effect: this.effect, 
+                  hu: this.huSlow // 内側の輪郭は遅い方の色
+                };
+                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+              }
             }
           }
         }
