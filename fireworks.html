@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>花火アニメーション（確率調整対応版）</title>
+  <title>花火アニメーション（奥行き表現対応版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.sound.min.js"></script>
   <style>
@@ -228,6 +228,14 @@
         }
         this.effect = random(effects);
 
+        // ===== 奥行き表現の追加 (1/4) =====
+        // 'smiley'と'heart'に3D回転用のランダムな傾きを追加
+        if (this.effect === 'smiley' || this.effect === 'heart') {
+          this.pitch = random(TWO_PI); // x軸周りの回転
+          this.yaw = random(TWO_PI);   // y軸周りの回転
+        }
+        // ===================================
+
         if (this.effect === 'smiley') {
             this.huOutline = 60;
             this.huEyes = 120;
@@ -283,6 +291,21 @@
           }
         }
       }
+      
+      // ===== 奥行き表現の追加 (2/4) =====
+      // 3D回転を適用するヘルパーメソッド
+      _apply3DRotation(vector) {
+        // y軸周りの回転 (Yaw)
+        let rotatedX = vector.x * cos(this.yaw) + vector.z * sin(this.yaw);
+        let rotatedZ_afterYaw = -vector.x * sin(this.yaw) + vector.z * cos(this.yaw);
+        
+        // x軸周りの回転 (Pitch)
+        let rotatedY = vector.y * cos(this.pitch) - rotatedZ_afterYaw * sin(this.pitch);
+        let rotatedZ_afterPitch = vector.y * sin(this.pitch) + rotatedZ_afterYaw * cos(this.pitch);
+
+        return createVector(rotatedX, rotatedY, rotatedZ_afterPitch);
+      }
+      // ===================================
 
       explode() {
         if (this.launchSoundInstance) {
@@ -303,41 +326,63 @@
           }, SOUND_DELAY_MS);
         }
 
+        // ===== 奥行き表現の追加 (3/4) =====
         if (this.effect === 'smiley') {
             const explosionCenter = this.firework.pos;
+
+            // 輪郭
             const angleIncrement = TWO_PI / SMILEY_OUTLINE_PARTICLE_COUNT;
             for (let i = 0; i < SMILEY_OUTLINE_PARTICLE_COUNT; i++) {
                 const angle = i * angleIncrement;
-                const vel = p5.Vector.fromAngle(angle).mult(SMILEY_SCALE);
+                // 2Dの単位ベクトルを3Dに変換し、回転を適用
+                let rotatedVec = this._apply3DRotation(createVector(cos(angle), sin(angle), 0));
+                // 回転後のx, yを速度として使用
+                const vel = createVector(rotatedVec.x, rotatedVec.y).mult(SMILEY_SCALE);
                 const options = { velocity: vel, effect: 'smiley', hu: this.huOutline };
                 this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, options));
             }
-            const leftEyePos = createVector(-SMILEY_SCALE * SMILEY_EYE_OFFSET_X, -SMILEY_SCALE * SMILEY_EYE_OFFSET_Y);
-            const velLeftEye = leftEyePos.normalize().mult(SMILEY_EYE_SPEED);
+
+            // 目
+            let rotatedLeftEye = this._apply3DRotation(createVector(-SMILEY_EYE_OFFSET_X, -SMILEY_EYE_OFFSET_Y, 0));
+            const velLeftEye = createVector(rotatedLeftEye.x, rotatedLeftEye.y).normalize().mult(SMILEY_EYE_SPEED);
             const leftEyeOptions = { velocity: velLeftEye, effect: 'smiley', hu: this.huEyes };
             this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, leftEyeOptions));
-            const rightEyePos = createVector(SMILEY_SCALE * SMILEY_EYE_OFFSET_X, -SMILEY_SCALE * SMILEY_EYE_OFFSET_Y);
-            const velRightEye = rightEyePos.normalize().mult(SMILEY_EYE_SPEED);
+
+            let rotatedRightEye = this._apply3DRotation(createVector(SMILEY_EYE_OFFSET_X, -SMILEY_EYE_OFFSET_Y, 0));
+            const velRightEye = createVector(rotatedRightEye.x, rotatedRightEye.y).normalize().mult(SMILEY_EYE_SPEED);
             const rightEyeOptions = { velocity: velRightEye, effect: 'smiley', hu: this.huEyes };
             this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, rightEyeOptions));
+            
+            // 口
             if (SMILEY_MOUTH_PARTICLE_COUNT > 1) {
               for (let i = 0; i < SMILEY_MOUTH_PARTICLE_COUNT; i++) {
                 const angle = map(i, 0, SMILEY_MOUTH_PARTICLE_COUNT - 1, PI * 0.2, PI * 0.8);
-                const vel = p5.Vector.fromAngle(angle).mult(SMILEY_SCALE * 0.6);
+                // 2Dのベクトルを3Dに変換し、回転を適用
+                let rotatedVec = this._apply3DRotation(createVector(cos(angle), sin(angle), 0));
+                // 回転後のx, yを速度として使用
+                const vel = createVector(rotatedVec.x, rotatedVec.y).mult(SMILEY_SCALE * 0.6);
                 const options = { velocity: vel, effect: 'smiley', hu: this.huMouth };
                 this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, options));
               }
             }
+        // ===== 奥行き表現の追加 (4/4) =====
         } else if (this.effect === 'heart') {
             const particleCount = HEART_PARTICLE_COUNT;
             for (let i = 0; i < particleCount; i++) {
                 const t = map(i, 0, particleCount, 0, TWO_PI);
+                // ハートの数式から2D座標を計算
                 const x = 16 * pow(sin(t), 3);
                 const y = -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t));
-                const vel = createVector(x, y).mult(HEART_EXPLOSION_SCALE);
+                
+                // 2D座標を3Dベクトルに変換し、回転を適用
+                let pos3d = this._apply3DRotation(createVector(x, y, 0));
+
+                // 回転後のx, yを速度ベクトルとして使用し、スケールを調整
+                const vel = createVector(pos3d.x, pos3d.y).mult(HEART_EXPLOSION_SCALE);
                 const particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: this.hu };
                 this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
             }
+        // ===================================
         } else if (this.effect === 'kamuro') {
             const maxSpeed = EXPLOSION_SPEED_MAX / 2;
             for (let i = 0; i < this.particleCount; i++) {
