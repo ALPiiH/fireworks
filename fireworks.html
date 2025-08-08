@@ -24,16 +24,22 @@
     const CLICK_FIREWORK_COUNT = 1;
     const BACKGROUND_FADE_ALPHA = 15;
 
+    // ==================================================================
+    // --- ここからが変更箇所 (1/3) ---
     // 花火の種類ごとの数を設定（このオブジェクトの値を変更して確率を調整）
     const FIREWORK_TYPE_COUNTS = {
-      normal: 6,
-      colorChange: 3,
-      bicolor: 3,
-      kamuro: 3,
-      speedColor: 3,
-      heart: 1,
-      smiley: 1
+      normal: 16,
+      colorChange: 4,
+      bicolor: 4,
+      splitColor: 4,
+      speedColor: 4,
+      kamuro: 4,
+      heart: 2,
+      smiley: 2
     };
+
+    // --- ここまでが変更箇所 (1/3) ---
+    // ==================================================================
 
     // 打ち上げ時の物理挙動
     const LAUNCH_SPEED_MIN = -11;
@@ -234,9 +240,15 @@
 
         this.type = (this.effect === 'kamuro') ? 'line' : 'point';
 
-        if (this.effect === 'speedColor' || this.effect === 'bicolor' || this.effect === 'colorChange') {
+        // ==================================================================
+        // --- ここからが変更箇所 (2/3) ---
+        // 'splitColor'の場合も2色目の色(hu2)を準備する
+        if (this.effect === 'speedColor' || this.effect === 'bicolor' || this.effect === 'colorChange' || this.effect === 'splitColor') {
           this.hu2 = random(360);
         }
+        // --- ここまでが変更箇所 (2/3) ---
+        // ==================================================================
+        
         if (this.effect === 'speedColor') {
           this.huSlow = random(360);
           this.huFast = random(360);
@@ -326,11 +338,7 @@
                 const particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: this.hu };
                 this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
             }
-        // ==================================================================
-        // --- ここからが変更箇所 ---
-        // kamuroの場合の処理を追加
         } else if (this.effect === 'kamuro') {
-            // kamuroの最大速度を固定値に設定し、大きさを一定にする
             const maxSpeed = EXPLOSION_SPEED_MAX / 2;
             for (let i = 0; i < this.particleCount; i++) {
                 const vel = p5.Vector.random2D();
@@ -339,7 +347,6 @@
                 let particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: this.hu };
                 this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
             }
-            // 外側のリングも固定の最大速度で生成
             const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
             for (let i = 0; i < OUTER_RING_COUNT; i++) {
                 const angle = i * angleIncrementOuter;
@@ -347,7 +354,46 @@
                 let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: this.hu };
                 this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
             }
-        // --- ここまでが変更箇所 ---
+        // ==================================================================
+        // --- ここからが変更箇所 (3/3) ---
+        } else if (this.effect === 'splitColor') {
+            // 爆発中心を通り、ランダムな角度を持つ直線を仮想的に設定
+            // この直線の法線ベクトルを生成
+            const lineNormal = p5.Vector.fromAngle(random(TWO_PI));
+
+            // この花火の最大初速度を、定義された範囲内でランダムに決定
+            const currentMaxSpeed = random(EXPLOSION_MAX_SPEED_MIN, EXPLOSION_SPEED_MAX);
+
+            // パーティクルを生成
+            for (let i = 0; i < this.particleCount; i++) {
+                const vel = p5.Vector.random2D();
+                // 先に決定した最大初速度の範囲内で、各パーティクルの初速度を抽選
+                const speed = random(EXPLOSION_SPEED_MIN, currentMaxSpeed);
+                vel.mult(speed);
+
+                // パーティクルの速度ベクトルと、仮想的な直線の法線ベクトルの内積を計算
+                // 内積の符号によって、パーティクルが直線のどちら側にあるかを判定
+                const dotProduct = vel.dot(lineNormal);
+                const currentHu = (dotProduct > 0) ? this.hu : this.hu2;
+
+                let particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: currentHu };
+                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+            }
+
+            // 外側のリングも同じルールで色を分ける
+            const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
+            for (let i = 0; i < OUTER_RING_COUNT; i++) {
+                const angle = i * angleIncrementOuter;
+                // 外側のリングは、この花火の最大初速度を使用する
+                const velocity = p5.Vector.fromAngle(angle).mult(currentMaxSpeed);
+
+                const dotProduct = velocity.dot(lineNormal);
+                const currentHu = (dotProduct > 0) ? this.hu : this.hu2;
+
+                let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: currentHu };
+                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+            }
+        // --- ここまでが変更箇所 (3/3) ---
         // ==================================================================
         } else {
             // その他の球状花火 (normal, colorChange, bicolor, speedColor)
