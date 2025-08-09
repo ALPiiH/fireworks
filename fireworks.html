@@ -10,100 +10,128 @@
     body {
       padding: 0;
       margin: 0;
-      overflow: hidden;
+      overflow: hidden; /* スクロールバーを非表示にする */
     }
   </style>
 </head>
 <body>
   <script>
     // ==================================================================
-    // --- パラメータ設定 ---
+    //
+    // p5.js を使用した花火アニメーション
+    //
+    // 機能:
+    // - 複数の種類の花火（通常、ハート型、スマイリー型など）をランダムに打ち上げ
+    // - マウスクリックで任意の場所に花火を打ち上げ可能
+    // - BGMと効果音（打ち上げ音、爆発音）の再生機能
+    // - スタイリッシュなSVGアイコン付きのBGMオン/オフボタン
+    // - ウィンドウサイズ変更へのレスポンシブ対応
+    //
     // ==================================================================
-    // 花火の生成と背景
-    const NEW_FIREWORK_PROBABILITY = 0.01;
-    const CLICK_FIREWORK_COUNT = 1;
-    const BACKGROUND_FADE_ALPHA = 15;
 
-    // 花火の種類ごとの数を設定（このオブジェクトの値を変更して確率を調整）
+
+    // ==================================================================
+    // --- グローバル設定パラメータ ---
+    // これらの値を変更することで、アニメーションの挙動を調整できます。
+    // ==================================================================
+
+    // --- 花火の生成と背景に関する設定 ---
+    const NEW_FIREWORK_PROBABILITY = 0.01;      // 新しい花火が自動で生成される確率 (フレームごと)
+    const CLICK_FIREWORK_COUNT = 1;             // 1回のマウスクリックで打ち上げる花火の数
+    const BACKGROUND_FADE_ALPHA = 15;           // 背景のフェードアウト効果の強さ（値が小さいほど残像が長く残る）
+
+    // --- 花火の種類ごとの出現比率 ---
+    // 各種類の花火の数を設定します。この値の比率に基づいて、出現確率が決まります。
     const FIREWORK_TYPE_COUNTS = {
-      normal: 16,
-      colorChange: 4,
-      bicolor: 4,
-      splitColor: 4,
-      speedColor: 4,
-      kamuro: 4,
-      heart: 2,
-      smiley: 2
+      normal: 16,        // 通常の花火
+      colorChange: 4,    // 時間で色が変わる花火
+      bicolor: 4,        // 2色が混ざる花火
+      splitColor: 4,     // 爆発が2色に分割される花火
+      speedColor: 4,     // 粒子の速度で色が変わる花火
+      kamuro: 4,         // 錦冠 (にしきかむろ) のように垂れ下がる花火
+      heart: 2,          // ハート型の花火
+      smiley: 2          // スマイリーフェイス型の花火
     };
 
-    // 打ち上げ時の物理挙動
-    const LAUNCH_SPEED_MIN = -11;
-    const LAUNCH_SPEED_MAX = -6;
-    const GRAVITY = 0.1;
+    // --- 打ち上げ時の物理挙動に関する設定 ---
+    const LAUNCH_SPEED_MIN = -11;   // 打ち上げの最小初速度
+    const LAUNCH_SPEED_MAX = -6;    // 打ち上げの最大初速度
+    const GRAVITY = 0.1;            // 花火に適用される重力加速度
 
-    // 爆発時のパーティクル（粒子）設定
-    const PARTICLE_COUNT_MIN = 80;
-    const PARTICLE_COUNT_MAX = 200;
-    const OUTER_RING_COUNT = 15;
-    const COLOR_CHANGE_THRESHOLD = 135;
-    const DEFAULT_PARTICLE_WEIGHT = 2;
-    const KAMURO_TRAIL_WEIGHT = 1;
-    const EXPLOSION_SPEED_MIN = 0.5;
-    const EXPLOSION_SPEED_MAX = 10;
-    const EXPLOSION_MAX_SPEED_MIN = 4;
-    const PARTICLE_DRAG = 0.96;
-    const PARTICLE_FADE_RATE = 3.5;
+    // --- 爆発時のパーティクル (粒子) に関する設定 ---
+    const PARTICLE_COUNT_MIN = 80;        // 爆発で生成される粒子の最小数
+    const PARTICLE_COUNT_MAX = 200;       // 爆発で生成される粒子の最大数
+    const OUTER_RING_COUNT = 15;          // 爆発時に外周を形成する粒子の数
+    const COLOR_CHANGE_THRESHOLD = 135;   // 'colorChange' タイプで色が変わるまでの残り寿命
+    const DEFAULT_PARTICLE_WEIGHT = 2;    // 通常の粒子の太さ
+    const EXPLOSION_SPEED_MIN = 0.5;      // 爆発時の粒子の最小飛散速度
+    const EXPLOSION_SPEED_MAX = 10;       // 爆発時の粒子の最大飛散速度
+    const EXPLOSION_MAX_SPEED_MIN = 4;    // 爆発の最大速度の最小値
+    const PARTICLE_DRAG = 0.96;           // 粒子の速度にかかる空気抵抗 (1に近いほど減速しにくい)
+    const PARTICLE_FADE_RATE = 3.5;       // 通常の粒子の消えゆく速さ (値が大きいほど速く消える)
 
-    // 特殊エフェクト関連
-    const SPEED_COLOR_THRESHOLD = 5.0;
-    const SPEED_COLOR_RING_COUNT = 15;
-    const KAMURO_GRAVITY = 0.03;
-    const KAMURO_FADE_RATE = 1.8;
-    const HEART_PARTICLE_COUNT = 30;
-    const HEART_EXPLOSION_SCALE = 0.2;
-    const SMILEY_SCALE = 3;
-    const SMILEY_OUTLINE_PARTICLE_COUNT = 20;
-    const SMILEY_MOUTH_PARTICLE_COUNT = 4;
-    const SMILEY_EYE_OFFSET_X = 0.4;
-    const SMILEY_EYE_OFFSET_Y = 0.4;
-    const SMILEY_EYE_SPEED = 1.5;
+    // --- 特殊な花火エフェクトに関する設定 ---
+    const SPEED_COLOR_THRESHOLD = 5.0;      // 'speedColor' タイプで色が変わる速度のしきい値
+    const SPEED_COLOR_RING_COUNT = 15;      // 'speedColor' タイプで内側の輪を形成する粒子の数
+    const KAMURO_GRAVITY = 0.03;            // 'kamuro' タイプに適用される特別な重力 (ゆっくり落ちる)
+    const KAMURO_TRAIL_WEIGHT = 1;          // 'kamuro' タイプの粒子の軌跡の太さ
+    const KAMURO_FADE_RATE = 1.8;           // 'kamuro' タイプの消えゆく速さ
+    const HEART_PARTICLE_COUNT = 30;        // 'heart' タイプを形成する粒子の数
+    const HEART_EXPLOSION_SCALE = 0.2;      // 'heart' タイプの爆発の大きさのスケール
+    const SMILEY_SCALE = 3;                 // 'smiley' タイプの大きさのスケール
+    const SMILEY_OUTLINE_PARTICLE_COUNT = 20; // 'smiley' の輪郭を形成する粒子の数
+    const SMILEY_MOUTH_PARTICLE_COUNT = 4;  // 'smiley' の口を形成する粒子の数
+    const SMILEY_EYE_OFFSET_X = 0.4;        // 'smiley' の目の中心からのX座標オフセット
+    const SMILEY_EYE_OFFSET_Y = 0.4;        // 'smiley' の目の中心からのY座標オフセット
+    const SMILEY_EYE_SPEED = 1.5;           // 'smiley' の目の飛散速度
 
-    // 音声関連
-    const SOUND_DELAY_MS = 1000;
-    const LAUNCH_SOUND_PROBABILITY = 0.2;
-    const LAUNCH_SOUND_VOLUME = 0.1;
-    const EXPLOSION_SOUND_VOLUME = 1.0;
-    // ===== BGM追加 (1/4) =====
-    const BGM_VOLUME = 0.04; // BGMの音量
-    // ===========================
+    // --- 音声関連の設定 ---
+    const SOUND_DELAY_MS = 1000;            // 音声再生の遅延時間 (ミリ秒) - 削除予定
+    const LAUNCH_SOUND_PROBABILITY = 0.2;   // 打ち上げ音が再生される確率
+    const LAUNCH_SOUND_VOLUME = 0.1;        // 打ち上げ音の音量 (0.0 ~ 1.0)
+    const EXPLOSION_SOUND_VOLUME = 1.0;     // 爆発音の音量 (0.0 ~ 1.0)
+    const BGM_VOLUME = 0.04;                // BGMの音量 (0.0 ~ 1.0)
 
+    // --- BGMボタンのSVGアイコン定義 ---
+    // 音声オン時のアイコン (Bootstrap Icons: volume-up-fill)
+    const iconVolumeOn = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/><path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.482 5.482 0 0 1 11.025 8a5.482 5.482 0 0 1-1.61 3.89l.706.706z"/><path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>`;
+    // 音声オフ時のアイコン (Bootstrap Icons: volume-mute-fill)
+    const iconVolumeOff = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06zm7.137 2.096a.5.5 0 0 1 0 .708L12.207 8l1.647 1.646a.5.5 0 0 1-.708.708L11.5 8.707l-1.646 1.647a.5.5 0 0 1-.708-.708L10.793 8 9.146 6.354a.5.5 0 0 1 .708-.708L11.5 7.293l1.646-1.647a.5.5 0 0 1 .708 0z"/></svg>`;
+
+
+    // ==================================================================
     // --- グローバル変数 ---
-    const launchSounds = [];
-    const NUM_LAUNCH_SOUNDS = 20;
-    let nextLaunchSound = 0;
+    // ==================================================================
+    const launchSounds = [];      // 打ち上げ音のサウンドオブジェクトを格納する配列
+    const NUM_LAUNCH_SOUNDS = 20; // 多数の同時再生に対応するための打ち上げ音インスタンス数
+    let nextLaunchSound = 0;      // 次に再生する打ち上げ音のインデックス
 
-    const explosionSounds = [];
-    const NUM_EXPLOSION_SOUNDS = 20;
-    let nextExplosionSound = 0;
+    const explosionSounds = [];   // 爆発音のサウンドオブジェクトを格納する配列
+    const NUM_EXPLOSION_SOUNDS = 20; // 多数の同時再生に対応するための爆発音インスタンス数
+    let nextExplosionSound = 0;   // 次に再生する爆発音のインデックス
 
-    let fireworks = [];
-    let gravity;
-    let kamuroGravity;
-    // ===== BGM追加 (2/4) =====
-    let bgm; // BGM用変数を追加
-    // ===========================
+    let fireworks = [];       // 現在画面上にあるすべての花火を格納する配列
+    let gravity;              // 重力ベクトル
+    let kamuroGravity;        // 'kamuro' 用の特別な重力ベクトル
+    let bgm;                  // BGMのサウンドオブジェクト
+    let bgmButton;            // BGM切り替えボタンのDOM要素
 
+
+    /**
+     * @function preload
+     * @description p5.jsのメイン処理が始まる前に、音声ファイルなどのアセットを読み込むための関数。
+     */
     function preload() {
       try {
         soundFormats('mp3');
-        // ===== BGM追加 (3/4) =====
-        // BGMファイルを読み込む
         bgm = loadSound('Fireworks Blooming1.mp3');
-        // ===========================
 
+        // 打ち上げ音を複数読み込み、配列に格納
         for (let i = 0; i < NUM_LAUNCH_SOUNDS; i++) {
           launchSounds.push(loadSound('launch.mp3'));
         }
+
+        // 複数の爆発音ファイルを均等に読み込み、配列に格納
         const explosionSoundFiles = ['explosion1.mp3', 'explosion2.mp3', 'explosion3.mp3', 'explosion4.mp3', 'explosion5.mp3'];
         const numPerSound = NUM_EXPLOSION_SOUNDS / explosionSoundFiles.length;
         for (let i = 0; i < numPerSound; i++) {
@@ -112,108 +140,226 @@
           }
         }
       } catch (e) {
-        // エラーメッセージにBGMファイル名を追加
-        console.error("音声ファイルの読み込みに失敗しました。bgm.mp3, launch.mp3 と explosion1.mp3〜explosion5.mp3 を用意してください。");
+        console.error("音声ファイルの読み込みに失敗しました。'Fireworks Blooming1.mp3', 'launch.mp3', 'explosion1.mp3'〜'explosion5.mp3' をHTMLファイルと同じ階層に配置してください。");
       }
     }
 
+    /**
+     * @function setup
+     * @description スケッチの初期設定を行う関数。最初に一度だけ実行される。
+     */
     function setup() {
+      // キャンバスをウィンドウサイズで作成
       createCanvas(windowWidth, windowHeight);
+      
+      // グローバル変数の初期化
       gravity = createVector(0, GRAVITY);
       kamuroGravity = createVector(0, KAMURO_GRAVITY);
-      stroke(255);
-      colorMode(HSB);
+      
+      // 描画設定
+      stroke(255);        // 線の色を白に設定
+      colorMode(HSB);     // 色の表現モードをHSB (色相, 彩度, 明度) に設定
+      
+      // 爆発音をランダムな順序で再生するためにシャッフル
       shuffle(explosionSounds, true);
+
+      // --- BGM切り替えボタンの生成と設定 ---
+      bgmButton = createButton(iconVolumeOff); // 初期アイコンはオフ状態で生成
+      bgmButton.position(10, 10);
+      bgmButton.mousePressed(toggleBgm);
+      
+      // ボタンの見た目を整えるCSSスタイル設定
+      bgmButton.style('padding', '8px');
+      bgmButton.style('background-color', 'black');
+      bgmButton.style('color', 'white');
+      bgmButton.style('border', '1px solid black');
+      bgmButton.style('cursor', 'pointer');
+      bgmButton.style('display', 'flex');
+      bgmButton.style('align-items', 'center');
+      bgmButton.style('justify-content', 'center');
+      
+      // BGMの音量を設定
+      if (bgm && bgm.isLoaded()) {
+        bgm.setVolume(BGM_VOLUME);
+      }
     }
 
+    /**
+     * @function draw
+     * @description 毎フレーム実行される描画関数。アニメーションの更新と描画を行う。
+     */
     function draw() {
+      // RGBモードに切り替え、背景を半透明の黒で塗りつぶす (これにより残像効果が生まれる)
       colorMode(RGB);
       background(0, 0, 0, BACKGROUND_FADE_ALPHA);
+
+      // 一定の確率で新しい花火を打ち上げる
       if (random(1) < NEW_FIREWORK_PROBABILITY) {
         fireworks.push(new Firework());
       }
+
+      // すべての花火の状態を更新し、描画する
+      // ループは逆順で行い、処理中に要素を安全に削除できるようにする
       for (let i = fireworks.length - 1; i >= 0; i--) {
         fireworks[i].update();
         fireworks[i].show();
+        // 役目を終えた花火を配列から削除
         if (fireworks[i].done()) {
           fireworks.splice(i, 1);
         }
       }
     }
 
+    /**
+     * @function mousePressed
+     * @description マウスがクリックされたときに実行される関数。
+     */
     function mousePressed() {
+      // ユーザーの操作をきっかけにオーディオコンテキストを開始する (ブラウザの自動再生ポリシー対策)
       if (getAudioContext().state !== 'running') {
         getAudioContext().resume();
       }
-      
-      // ===== BGM追加 (4/4) =====
-      // ユーザーの最初のクリックでBGMのループ再生を開始
-      // BGMがロード済みで、かつ再生中でない場合のみ実行
-      if (bgm && bgm.isLoaded() && !bgm.isPlaying()) {
-        bgm.setVolume(BGM_VOLUME);
-        bgm.loop();
-      }
-      // ===========================
-
+      // クリックした位置に新しい花火を生成
       for (let i = 0; i < CLICK_FIREWORK_COUNT; i++) {
         fireworks.push(new Firework(mouseX));
       }
     }
+    
+    /**
+     * @function toggleBgm
+     * @description BGMの再生と停止を切り替え、ボタンのアイコンも更新する関数。
+     */
+    function toggleBgm() {
+      // マウス操作と同様にオーディオコンテキストを開始
+      if (getAudioContext().state !== 'running') {
+        getAudioContext().resume();
+      }
 
+      if (bgm.isPlaying()) {
+        bgm.stop();
+        bgmButton.html(iconVolumeOff); // BGMを停止し、アイコンをオフ表示に
+      } else {
+        if (bgm.isLoaded()) {
+          bgm.loop();
+          bgmButton.html(iconVolumeOn); // BGMをループ再生し、アイコンをオン表示に
+        }
+      }
+    }
+
+    /**
+     * @function windowResized
+     * @description ブラウザのウィンドウサイズが変更されたときに実行される関数。
+     */
     function windowResized() {
+      // キャンバスのサイズを新しいウィンドウサイズに合わせる
       resizeCanvas(windowWidth, windowHeight);
     }
 
+    // ==================================================================
+    // --- Particle クラス ---
+    // 花火の粒子（打ち上げ時の光、爆発後の火の粉）を表現する。
+    // ==================================================================
     class Particle {
+      /**
+       * @constructor
+       * @param {number} x - 粒子の初期X座標
+       * @param {number} y - 粒子の初期Y座標
+       * @param {boolean} isFirework - 打ち上げ用の粒子か、爆発後の粒子かのフラグ
+       * @param {object} options - 色相、速度、種類などの追加オプション
+       */
       constructor(x, y, isFirework, options = {}) {
-        this.pos = createVector(x, y);
-        this.isFirework = isFirework;
-        this.lifespan = 255;
-        this.acc = createVector(0, 0);
-        this.history = [];
-        this.hu = options.hu || 0;
-        this.hu2 = options.hu2 || this.hu;
-        this.type = options.type || 'point';
-        this.effect = options.effect || 'normal';
+        this.pos = createVector(x, y);        // 位置ベクトル
+        this.isFirework = isFirework;         // 打ち上げ用かどうかのフラグ
+        this.lifespan = 255;                  // 寿命 (透明度として使用)
+        this.acc = createVector(0, 0);        // 加速度ベクトル
+        this.history = [];                    // 'line'タイプの軌跡を保存する配列
+
+        // オプションからプロパティを設定
+        this.hu = options.hu || 0;            // 色相 (プライマリ)
+        this.hu2 = options.hu2 || this.hu;    // 色相 (セカンダリ、colorChangeなどで使用)
+        this.type = options.type || 'point';  // 粒子の描画タイプ ('point' or 'line')
+        this.effect = options.effect || 'normal'; // 適用されるエフェクトの種類
+
+        // 打ち上げ用か爆発後かで初速度を決定
         if (isFirework) {
           this.vel = createVector(0, random(LAUNCH_SPEED_MIN, LAUNCH_SPEED_MAX));
         } else {
           this.vel = options.velocity;
         }
       }
-      applyForce(force) { this.acc.add(force); }
+
+      /**
+       * @method applyForce
+       * @description 粒子に力 (重力など) を加える。
+       * @param {p5.Vector} force - 加える力のベクトル
+       */
+      applyForce(force) {
+        this.acc.add(force);
+      }
+
+      /**
+       * @method update
+       * @description 粒子の状態 (位置、速度、寿命) を更新する。
+       */
       update() {
         if (!this.isFirework) {
+          // 爆発後の粒子の場合、空気抵抗と寿命の減少を適用
           this.vel.mult(PARTICLE_DRAG);
           this.lifespan -= (this.effect === 'kamuro') ? KAMURO_FADE_RATE : PARTICLE_FADE_RATE;
+
+          // 'line' タイプの場合、軌跡を記録
           if (this.type === 'line') {
             this.history.push(this.pos.copy());
             if (this.history.length > 30) this.history.splice(0, 1);
           }
         }
+        // 物理法則に従って位置を更新
         this.vel.add(this.acc);
         this.pos.add(this.vel);
-        this.acc.mult(0);
+        this.acc.mult(0); // 加速度をリセット
       }
-      done() { return this.lifespan < 0; }
+
+      /**
+       * @method done
+       * @description 粒子の寿命が尽きたかどうかを判定する。
+       * @returns {boolean} - 寿命が尽きていればtrue
+       */
+      done() {
+        return this.lifespan < 0;
+      }
+
+      /**
+       * @method show
+       * @description 粒子をキャンバスに描画する。
+       */
       show() {
-        colorMode(HSB);
+        colorMode(HSB); // 描画前にHSBモードに設定
+
         if (!this.isFirework) {
-          strokeWeight((this.effect === 'kamuro') ? KAMURO_TRAIL_WEIGHT : DEFAULT_PARTICLE_WEIGHT);
+          // --- 爆発後の粒子の描画 ---
+          const weight = (this.effect === 'kamuro') ? KAMURO_TRAIL_WEIGHT : DEFAULT_PARTICLE_WEIGHT;
+          strokeWeight(weight);
+
           let currentHu = this.hu;
+          // 'colorChange' エフェクトの場合、寿命に応じて色を変化させる
           if (this.effect === 'colorChange' && this.lifespan <= COLOR_CHANGE_THRESHOLD) {
             currentHu = this.hu2;
           }
-          stroke(currentHu, 255, 255, this.lifespan);
+          
+          stroke(currentHu, 255, 255, this.lifespan); // 寿命を透明度として使用
+
           if (this.type === 'line') {
+            // 'line' タイプは軌跡を描画
             beginShape();
             noFill();
             for (const p of this.history) vertex(p.x, p.y);
             endShape();
           } else {
+            // 'point' タイプは点を描画
             point(this.pos.x, this.pos.y);
           }
         } else {
+          // --- 打ち上げ中の粒子の描画 ---
           strokeWeight(4);
           stroke(this.hu, 255, 255);
           point(this.pos.x, this.pos.y);
@@ -221,79 +367,109 @@
       }
     }
 
+
+    // ==================================================================
+    // --- Firework クラス ---
+    // 一つの花火のライフサイクル (打ち上げ、爆発、消滅) を管理する。
+    // ==================================================================
     class Firework {
+      /**
+       * @constructor
+       * @param {number} [x] - 花火の打ち上げX座標。指定がない場合はランダム。
+       */
       constructor(x) {
+        // --- 打ち上げ音の再生 ---
         this.launchSoundInstance = null;
         if (random(1) < LAUNCH_SOUND_PROBABILITY && launchSounds.length > 0) {
             this.launchSoundInstance = launchSounds[nextLaunchSound];
             const sound = this.launchSoundInstance;
             if (sound.isLoaded()) {
-                setTimeout(() => {
-                    sound.setVolume(LAUNCH_SOUND_VOLUME);
-                    sound.play();
-                }, SOUND_DELAY_MS);
+                // 遅延は削除の方向で (光速と音速の差を表現するなら別のアプローチ)
+                sound.setVolume(LAUNCH_SOUND_VOLUME);
+                sound.play();
             }
-            nextLaunchSound = (nextLaunchSound + 1) % NUM_LAUNCH_SOUNDS;
+            nextLaunchSound = (nextLaunchSound + 1) % NUM_LAUNCH_SOUNDS; // 次のサウンドへ
         }
 
+        // --- 花火の種類の決定 ---
         const effects = [];
         for (const type in FIREWORK_TYPE_COUNTS) {
-          const count = FIREWORK_TYPE_COUNTS[type];
-          for (let i = 0; i < count; i++) {
+          for (let i = 0; i < FIREWORK_TYPE_COUNTS[type]; i++) {
             effects.push(type);
           }
         }
-        this.effect = random(effects);
+        this.effect = random(effects); // 設定された比率に基づきランダムに選択
 
+        // 特殊形状の花火のための3D回転角度を初期化
         if (this.effect === 'smiley' || this.effect === 'heart') {
-          this.pitch = random(TWO_PI);
-          this.yaw = random(TWO_PI);
+          this.pitch = random(TWO_PI); // 縦回転
+          this.yaw = random(TWO_PI);   // 横回転
         }
 
+        // --- 花火の色を設定 ---
         if (this.effect === 'smiley') {
-            this.huOutline = 60;
-            this.huEyes = 120;
-            this.huMouth = 0;
+            this.huOutline = 60; // 輪郭は黄色
+            this.huEyes = 120;   // 目は緑色
+            this.huMouth = 0;    // 口は赤色
         } else if (this.effect === 'heart') {
-            this.hu = 350;
+            this.hu = 350; // ハートは赤紫色
         } else {
-            this.hu = random(360);
+            this.hu = random(360); // それ以外はランダムな色相
         }
-
-        this.type = (this.effect === 'kamuro') ? 'line' : 'point';
-
+        
+        // 2色使用する花火のセカンダリカラーを設定
         if (this.effect === 'speedColor' || this.effect === 'bicolor' || this.effect === 'colorChange' || this.effect === 'splitColor') {
           this.hu2 = random(360);
         }
-        
         if (this.effect === 'speedColor') {
-          this.huSlow = random(360);
-          this.huFast = random(360);
+          this.huSlow = random(360); // 低速時の色
+          this.huFast = random(360); // 高速時の色
         }
+        
+        // 粒子の描画タイプを設定 ('kamuro'は軌跡を残す)
+        this.type = (this.effect === 'kamuro') ? 'line' : 'point';
 
-        const startX = x || random(200, width - 200);
+        // --- 打ち上げ用のParticleを生成 ---
+        const startX = x || random(200, width - 200); // 指定がなければ画面中央付近から
         this.firework = new Particle(startX, height, true, { hu: this.hu || this.huOutline });
+        
         this.exploded = false;
-        this.particles = [];
-        this.particleCount = random(PARTICLE_COUNT_MIN, PARTICLE_COUNT_MAX);
+        this.particles = []; // 爆発後の粒子を格納する配列
+        this.particleCount = floor(random(PARTICLE_COUNT_MIN, PARTICLE_COUNT_MAX));
       }
 
-      done() { return this.exploded && this.particles.length === 0; }
+      /**
+       * @method done
+       * @description 花火が爆発し、全ての粒子が消えたかを判定する。
+       * @returns {boolean} - 完了していればtrue
+       */
+      done() {
+        return this.exploded && this.particles.length === 0;
+      }
 
+      /**
+       * @method update
+       * @description 花火の状態をフレームごとに更新する。
+       */
       update() {
         if (!this.exploded) {
+          // --- 爆発前の処理 ---
           this.firework.applyForce(gravity);
           this.firework.update();
+          // 速度が正 (落下に転じた) になったら爆発
           if (this.firework.vel.y >= 0) {
             this.exploded = true;
             this.explode();
           }
         } else {
+          // --- 爆発後の処理 ---
           for (let i = this.particles.length - 1; i >= 0; i--) {
+            // 'kamuro' は特別な重力を適用
             if (this.particles[i].effect === 'kamuro' && !this.particles[i].isFirework) {
               this.particles[i].applyForce(kamuroGravity);
             }
             this.particles[i].update();
+            // 寿命が尽きた粒子を削除
             if (this.particles[i].done()) {
               this.particles.splice(i, 1);
             }
@@ -301,138 +477,143 @@
         }
       }
       
+      /**
+       * @method _apply3DRotation
+       * @private
+       * @description 3Dベクトルに回転を適用するヘルパーメソッド。スマイリーやハートの向きを変えるのに使用。
+       * @param {p5.Vector} vector - 回転させる3Dベクトル (z成分を含む)
+       * @returns {p5.Vector} - 回転後の3Dベクトル
+       */
       _apply3DRotation(vector) {
+        // Yaw (Y軸周り) 回転
         let rotatedX = vector.x * cos(this.yaw) + vector.z * sin(this.yaw);
         let rotatedZ_afterYaw = -vector.x * sin(this.yaw) + vector.z * cos(this.yaw);
         
+        // Pitch (X軸周り) 回転
         let rotatedY = vector.y * cos(this.pitch) - rotatedZ_afterYaw * sin(this.pitch);
         let rotatedZ_afterPitch = vector.y * sin(this.pitch) + rotatedZ_afterYaw * cos(this.pitch);
 
         return createVector(rotatedX, rotatedY, rotatedZ_afterPitch);
       }
 
+      /**
+       * @method explode
+       * @description 花火を爆発させ、エフェクトに応じた粒子を生成する。
+       */
       explode() {
+        // 打ち上げ音を停止
         if (this.launchSoundInstance) {
           const soundToStop = this.launchSoundInstance;
-          setTimeout(() => {
-            if (soundToStop.isPlaying()) {
-              soundToStop.stop();
-            }
-          }, SOUND_DELAY_MS);
+          if (soundToStop.isPlaying()) {
+            soundToStop.stop();
+          }
         }
 
+        // 爆発音を再生
         if (explosionSounds.length > 0 && explosionSounds[nextExplosionSound].isLoaded()) {
           const sound = explosionSounds[nextExplosionSound];
           nextExplosionSound = (nextExplosionSound + 1) % NUM_EXPLOSION_SOUNDS;
-          setTimeout(() => {
-            sound.setVolume(EXPLOSION_SOUND_VOLUME);
-            sound.play();
-          }, SOUND_DELAY_MS);
+          sound.setVolume(EXPLOSION_SOUND_VOLUME);
+          sound.play();
         }
 
+        const explosionCenter = this.firework.pos;
+
+        // エフェクトの種類に応じて粒子を生成
         if (this.effect === 'smiley') {
-            const explosionCenter = this.firework.pos;
+            // スマイリーの輪郭
             const angleIncrement = TWO_PI / SMILEY_OUTLINE_PARTICLE_COUNT;
             for (let i = 0; i < SMILEY_OUTLINE_PARTICLE_COUNT; i++) {
                 const angle = i * angleIncrement;
                 let rotatedVec = this._apply3DRotation(createVector(cos(angle), sin(angle), 0));
                 const vel = createVector(rotatedVec.x, rotatedVec.y).mult(SMILEY_SCALE);
-                const options = { velocity: vel, effect: 'smiley', hu: this.huOutline };
-                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, options));
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: vel, effect: 'smiley', hu: this.huOutline }));
             }
+            // 両目
             let rotatedLeftEye = this._apply3DRotation(createVector(-SMILEY_EYE_OFFSET_X, -SMILEY_EYE_OFFSET_Y, 0));
             const velLeftEye = createVector(rotatedLeftEye.x, rotatedLeftEye.y).normalize().mult(SMILEY_EYE_SPEED);
-            const leftEyeOptions = { velocity: velLeftEye, effect: 'smiley', hu: this.huEyes };
-            this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, leftEyeOptions));
+            this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: velLeftEye, effect: 'smiley', hu: this.huEyes }));
 
             let rotatedRightEye = this._apply3DRotation(createVector(SMILEY_EYE_OFFSET_X, -SMILEY_EYE_OFFSET_Y, 0));
             const velRightEye = createVector(rotatedRightEye.x, rotatedRightEye.y).normalize().mult(SMILEY_EYE_SPEED);
-            const rightEyeOptions = { velocity: velRightEye, effect: 'smiley', hu: this.huEyes };
-            this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, rightEyeOptions));
+            this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: velRightEye, effect: 'smiley', hu: this.huEyes }));
             
+            // 口
             if (SMILEY_MOUTH_PARTICLE_COUNT > 1) {
               for (let i = 0; i < SMILEY_MOUTH_PARTICLE_COUNT; i++) {
                 const angle = map(i, 0, SMILEY_MOUTH_PARTICLE_COUNT - 1, PI * 0.2, PI * 0.8);
                 let rotatedVec = this._apply3DRotation(createVector(cos(angle), sin(angle), 0));
                 const vel = createVector(rotatedVec.x, rotatedVec.y).mult(SMILEY_SCALE * 0.6);
-                const options = { velocity: vel, effect: 'smiley', hu: this.huMouth };
-                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, options));
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: vel, effect: 'smiley', hu: this.huMouth }));
               }
             }
         } else if (this.effect === 'heart') {
-            const particleCount = HEART_PARTICLE_COUNT;
-            for (let i = 0; i < particleCount; i++) {
-                const t = map(i, 0, particleCount, 0, TWO_PI);
+            // ハートの数式を用いて粒子を配置
+            for (let i = 0; i < HEART_PARTICLE_COUNT; i++) {
+                const t = map(i, 0, HEART_PARTICLE_COUNT, 0, TWO_PI);
                 const x = 16 * pow(sin(t), 3);
                 const y = -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t));
                 
                 let pos3d = this._apply3DRotation(createVector(x, y, 0));
                 const vel = createVector(pos3d.x, pos3d.y).mult(HEART_EXPLOSION_SCALE);
-                const particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: this.hu };
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: vel, type: this.type, effect: this.effect, hu: this.hu }));
             }
         } else if (this.effect === 'kamuro') {
+            // 錦冠: ゆっくり垂れ下がる粒子を生成
             const maxSpeed = EXPLOSION_SPEED_MAX / 2;
             for (let i = 0; i < this.particleCount; i++) {
-                const vel = p5.Vector.random2D();
-                let speed = random(EXPLOSION_SPEED_MIN, maxSpeed);
-                vel.mult(speed);
-                let particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: this.hu };
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                const vel = p5.Vector.random2D().mult(random(EXPLOSION_SPEED_MIN, maxSpeed));
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: vel, type: this.type, effect: this.effect, hu: this.hu }));
             }
-            const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
+            // 外周にも粒子を配置して形を整える
             for (let i = 0; i < OUTER_RING_COUNT; i++) {
-                const angle = i * angleIncrementOuter;
-                const velocity = p5.Vector.fromAngle(angle).mult(maxSpeed);
-                let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: this.hu };
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                const velocity = p5.Vector.fromAngle(i * (TWO_PI / OUTER_RING_COUNT)).mult(maxSpeed);
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: velocity, type: this.type, effect: this.effect, hu: this.hu }));
             }
         } else if (this.effect === 'splitColor') {
-            const lineNormal = p5.Vector.fromAngle(random(TWO_PI));
+            // 分割線で2色に分かれる花火
+            const lineNormal = p5.Vector.fromAngle(random(TWO_PI)); // 分割線の法線ベクトル
             const currentMaxSpeed = random(EXPLOSION_MAX_SPEED_MIN, EXPLOSION_SPEED_MAX);
+            const createSplitParticle = (vel) => {
+                const dotProduct = vel.dot(lineNormal); // 法線との内積でどちら側か判定
+                const currentHu = (dotProduct > 0) ? this.hu : this.hu2;
+                return new Particle(explosionCenter.x, explosionCenter.y, false, { velocity: vel, type: this.type, effect: this.effect, hu: currentHu });
+            };
             for (let i = 0; i < this.particleCount; i++) {
-                const vel = p5.Vector.random2D();
-                const speed = random(EXPLOSION_SPEED_MIN, currentMaxSpeed);
-                vel.mult(speed);
-                const dotProduct = vel.dot(lineNormal);
-                const currentHu = (dotProduct > 0) ? this.hu : this.hu2;
-                let particleOptions = { velocity: vel, type: this.type, effect: this.effect, hu: currentHu };
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                this.particles.push(createSplitParticle(p5.Vector.random2D().mult(random(EXPLOSION_SPEED_MIN, currentMaxSpeed))));
             }
-            const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
             for (let i = 0; i < OUTER_RING_COUNT; i++) {
-                const angle = i * angleIncrementOuter;
-                const velocity = p5.Vector.fromAngle(angle).mult(currentMaxSpeed);
-                const dotProduct = velocity.dot(lineNormal);
-                const currentHu = (dotProduct > 0) ? this.hu : this.hu2;
-                let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: currentHu };
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                this.particles.push(createSplitParticle(p5.Vector.fromAngle(i * (TWO_PI / OUTER_RING_COUNT)).mult(currentMaxSpeed)));
             }
         } else {
+            // --- その他の標準的な花火の爆発 ---
             const currentMaxSpeed = random(EXPLOSION_MAX_SPEED_MIN, EXPLOSION_SPEED_MAX);
-            let maxSlowSpeed = 0;
+            let maxSlowSpeed = 0; // 'speedColor'用
+            
+            // 内部の粒子を生成
             for (let i = 0; i < this.particleCount; i++) {
-                const vel = p5.Vector.random2D();
-                let speed = random(EXPLOSION_SPEED_MIN, currentMaxSpeed);
+                const speed = random(EXPLOSION_SPEED_MIN, currentMaxSpeed);
+                const vel = p5.Vector.random2D().mult(speed);
+
                 if (this.effect === 'speedColor' && speed <= SPEED_COLOR_THRESHOLD && speed > maxSlowSpeed) {
-                    maxSlowSpeed = speed;
+                    maxSlowSpeed = speed; // 低速粒子の最大速度を記録
                 }
-                vel.mult(speed);
+                
                 let particleOptions = { velocity: vel, type: this.type, effect: this.effect };
-                if (this.effect === 'bicolor') {
+                if (this.effect === 'bicolor') { // 2色がランダムに混ざる
                     particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
-                } else if (this.effect === 'speedColor') {
+                } else if (this.effect === 'speedColor') { // 速度で色が変わる
                     particleOptions.hu = speed > SPEED_COLOR_THRESHOLD ? this.huFast : this.huSlow;
-                } else {
+                } else { // 通常または時間変化
                     particleOptions.hu = this.hu;
                     particleOptions.hu2 = this.hu2;
                 }
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, particleOptions));
             }
-            const angleIncrementOuter = TWO_PI / OUTER_RING_COUNT;
+
+            // 外周の粒子を生成 (形をくっきりとさせるため)
             for (let i = 0; i < OUTER_RING_COUNT; i++) {
-                const angle = i * angleIncrementOuter;
-                const velocity = p5.Vector.fromAngle(angle).mult(currentMaxSpeed);
+                const velocity = p5.Vector.fromAngle(i * (TWO_PI / OUTER_RING_COUNT)).mult(currentMaxSpeed);
                 let particleOptions = { velocity: velocity, type: this.type, effect: this.effect };
                 if (this.effect === 'bicolor') {
                     particleOptions.hu = random(1) < 0.5 ? this.hu : this.hu2;
@@ -442,26 +623,33 @@
                     particleOptions.hu = this.hu;
                     particleOptions.hu2 = this.hu2;
                 }
-                this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
+                this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, particleOptions));
             }
-            if (this.effect === 'speedColor') {
-                if (maxSlowSpeed > 0) {
-                    const angleIncrementInner = TWO_PI / SPEED_COLOR_RING_COUNT;
-                    for (let i = 0; i < SPEED_COLOR_RING_COUNT; i++) {
-                        const angle = i * angleIncrementInner;
-                        const velocity = p5.Vector.fromAngle(angle).mult(maxSlowSpeed);
-                        let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: this.huSlow };
-                        this.particles.push(new Particle(this.firework.pos.x, this.firework.pos.y, false, particleOptions));
-                    }
+            
+            // 'speedColor' の場合、内側に低速の輪を追加
+            if (this.effect === 'speedColor' && maxSlowSpeed > 0) {
+                for (let i = 0; i < SPEED_COLOR_RING_COUNT; i++) {
+                    const velocity = p5.Vector.fromAngle(i * (TWO_PI / SPEED_COLOR_RING_COUNT)).mult(maxSlowSpeed);
+                    let particleOptions = { velocity: velocity, type: this.type, effect: this.effect, hu: this.huSlow };
+                    this.particles.push(new Particle(explosionCenter.x, explosionCenter.y, false, particleOptions));
                 }
             }
         }
       }
+
+      /**
+       * @method show
+       * @description 花火（打ち上げ中または爆発後）を描画する。
+       */
       show() {
         if (!this.exploded) {
+          // 爆発前は、打ち上げ用の粒子のみ描画
           this.firework.show();
         } else {
-          for (let p of this.particles) p.show();
+          // 爆発後は、全ての粒子を描画
+          for (let p of this.particles) {
+            p.show();
+          }
         }
       }
     }
