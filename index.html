@@ -38,7 +38,7 @@
     // --- 花火の生成と背景に関する設定 ---
     const NEW_FIREWORK_PROBABILITY = 0.01;      // 新しい花火が自動で生成される確率 (フレームごと)
     const CLICK_FIREWORK_COUNT = 1;             // 1回のマウスクリックで打ち上げる花火の数
-    const BACKGROUND_FADE_ALPHA = 15;           // 背景のフェードアウト効果の強さ（値が小さいほど残像が長く残る）
+    const BACKGROUND_FADE_ALPHA = 25;           // 背景のフェードアウト効果の強さ（値が小さいほど残像が長く残る）
 
     // --- 花火の種類ごとの出現比率 ---
     // 各種類の花火の数を設定します。この値の比率に基づいて、出現確率が決まります。
@@ -325,7 +325,9 @@
        * @returns {boolean} - 寿命が尽きていればtrue
        */
       done() {
-        return this.lifespan < 0;
+        // ★★★ 修正箇所 ★★★
+        // 寿命が0以下になったら消滅と判定し、焼き付きを防ぐ
+        return this.lifespan <= 0;
       }
 
       /**
